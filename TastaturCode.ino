@@ -1,43 +1,80 @@
-#include <IRremote.hpp>
+// Tastatur: 6 Schalter (Pins 4-9, gegen GND) -> NEC-Signal direkt an ESP32-IR-Pin
+// Ausgang wie ein IR-Empfängermodul: Ruhe = HIGH, Impuls = LOW (kein 38-kHz-Träger)
+// Kontrolle: Taste n -> LED blinkt n-mal
 
-// Definition der Pins für die 6 Schalter
-// Code ist zu verifizieren ; 2026.10.23 Daniel
-const int schalterPins[6] = {2, 3, 4, 5, 6, 7}; 
-int letzterZustand[6] = {HIGH, HIGH, HIGH, HIGH, HIGH, HIGH};
+const int schalterPins[6] = {4, 5, 6, 7, 8, 9};
+int letzterZustand[6];
 
-// Die NEC-Infrarot-Codes für die Tasten 1 bis 6 (Beispiel-Codes)
-const uint32_t irCodes[6] = {
-  0xFF30CF, // Taste 1
-  0xFF18E7, // Taste 2
-  0xFF7A85, // Taste 3
-  0xFF10EF, // Taste 4
-  0xFF38C7, // Taste 5
-  0xFF5AA5  // Taste 6
-};
+const int ausgangPin = 3;   // -> IR-Pin (P_IR_SIGNAL) des ESP32
+const int ledPin = 13;      // eingebaute LED des Pro Mini
 
-const int irSendePin = 9; // Dieses Kabel geht zum IR-Pin des ESP32
+const bool LED_FEEDBACK = true;   // nach dem Test auf false setzen
+
+// NEC-Befehle, Adresse 0x00 -> KaRadio-Codes 0xFF00xx
+const uint8_t befehle[6] = {0x0C, 0x18, 0x5E, 0x08, 0x1C, 0x5A};
+
+void sendeByte(uint8_t b) {            // LSB zuerst
+  for (uint8_t i = 0; i < 8; i++) {
+    digitalWrite(ausgangPin, LOW);     // Impuls 560 us
+    delayMicroseconds(560);
+    digitalWrite(ausgangPin, HIGH);    // Pause: 560 us = 0, 1690 us = 1
+    delayMicroseconds((b & 1) ? 1690 : 560);
+    b >>= 1;
+  }
+}
+
+void sendeNEC(uint8_t adresse, uint8_t befehl) {
+  noInterrupts();
+  digitalWrite(ausgangPin, LOW);       // Startimpuls 9 ms
+  delayMicroseconds(9000);
+  digitalWrite(ausgangPin, HIGH);      // Startpause 4,5 ms
+  delayMicroseconds(4500);
+  sendeByte(adresse);
+  sendeByte((uint8_t)~adresse);
+  sendeByte(befehl);
+  sendeByte((uint8_t)~befehl);
+  digitalWrite(ausgangPin, LOW);       // Stopp-Impuls
+  delayMicroseconds(560);
+  digitalWrite(ausgangPin, HIGH);      // zurück in Ruhezustand
+  interrupts();
+}
+
+void blinke(int anzahl) {
+  for (int n = 0; n < anzahl; n++) {
+    digitalWrite(ledPin, HIGH);
+    delay(100);
+    digitalWrite(ledPin, LOW);
+    delay(150);
+  }
+}
 
 void setup() {
-  IrSender.begin(irSendePin); // Initialisiere den IR-Sender
-  
+  pinMode(ausgangPin, OUTPUT);
+  digitalWrite(ausgangPin, HIGH);      // Ruhepegel HIGH
+
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+
   for (int i = 0; i < 6; i++) {
-    pinMode(schalterPins[i], INPUT_PULLUP); // Interne Widerstände aktivieren
+    pinMode(schalterPins[i], INPUT_PULLUP);
     letzterZustand[i] = digitalRead(schalterPins[i]);
   }
 }
 
 void loop() {
   for (int i = 0; i < 6; i++) {
-    int aktuellerZustand = digitalRead(schalterPins[i]);
-    
-    // Wenn der Schalter umgelegt wurde (egal ob ein- oder ausgeschaltet)
-    if (aktuellerZustand != letzterZustand[i]) {
-      delay(50); // Entprellen des Schalters
-      
-      // Sende den NEC-Code an das Webradio
-      IrSender.sendNEC(0x00, irCodes[i], 0); 
-      
-      letzterZustand[i] = aktuellerZustand; // Zustand merken
+    int aktuell = digitalRead(schalterPins[i]);
+
+    if (aktuell != letzterZustand[i]) {
+      delay(50);                       // Entprellen
+      aktuell = digitalRead(schalterPins[i]);
+
+      // nur senden, wenn der Kontakt neu geschlossen wurde
+      if (aktuell == LOW && letzterZustand[i] == HIGH) {
+        sendeNEC(0x00, befehle[i]);
+        if (LED_FEEDBACK) blinke(i + 1);   // Taste 1 = 1x, ..., Taste 6 = 6x
+      }
+      letzterZustand[i] = aktuell;
     }
   }
 }
