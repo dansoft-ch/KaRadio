@@ -27,18 +27,19 @@ const bool DEBUG_SERIAL = true;   // 9600 Baud: Poti-Rohwert, Ziel, Zähler (zum
 // NEC-Befehle, Adresse 0x00 -> KaRadio-Codes 0xFF00xx
 const uint8_t befehle[6] = {0x0C, 0x18, 0x5E, 0x08, 0x1C, 0x5A};
 
-// Lautstärke-Befehle -> in KaRadio-CSV eintragen: K_UP = 0xFF0040, K_DOWN = 0xFF0044
+// Lautstärke-Befehle -> in KaRadio-CSV eintragen: K_RIGHT = 0xFF0040 (lauter, +5), K_LEFT = 0xFF0044 (leiser, -5)
 const uint8_t BEFEHL_LAUTER = 0x40;
 const uint8_t BEFEHL_LEISER = 0x44;
 
 // ---- Einstellungen Lautstärke ----
-const int  VOL_STUFEN    = 50;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
+const int  RADIO_STUFEN  = 51;    // So viele 5er-Schritte hat KaRadio von 0 bis 254 (für den Start-Sync)
+const int  VOL_STUFEN    = 30;    // Poti-Bereich in Schritten: 30 = bis Lautstärke ~150 (schnell), 51 = voller Bereich
 const int  RESYNC_EXTRA  = 6;     // Zusatzbefehle am Anschlag (Korrektur verlorener Impulse)
 const int  ADC_MIN       = 0;     // ADC-Wert bei Poti ganz zu
 const int  ADC_MAX       = 990;   // ADC-Wert bei Poti ganz auf (Pro Mini 3,3 V: ~990; bei 5 V: ~655)
 const int  TOTZONE       = 20;    // ADC-Werte an beiden Enden, die sicher als 0 bzw. Max gelten
 const float HYSTERESE    = 0.3;   // Poti muss 0,8 Schritte "über die Mitte" gehen, bevor das Ziel wechselt
-const unsigned long MIN_ABSTAND_MS  = 120;    // Mindestabstand zwischen IR-Telegrammen
+const unsigned long MIN_ABSTAND_MS  = 40;     // Mindestabstand zwischen IR-Telegrammen
 const unsigned long START_WARTEN_MS = 10000;  // so lange booten ESP32/KaRadio (Start-Sync erst danach)
 
 // ---- Zustand Lautstärke ----
@@ -83,6 +84,13 @@ void sendeMitAbstand(uint8_t befehl) {
   while (millis() - letzteSendung < MIN_ABSTAND_MS) { }
   sendeNEC(0x00, befehl);
   letzteSendung = millis();
+  if (DEBUG_SERIAL) {
+    Serial.print(F("IR -> 0xFF00"));
+    if (befehl < 0x10) Serial.print('0');
+    Serial.print(befehl, HEX);
+    Serial.print(F("  t="));
+    Serial.println(letzteSendung);
+  }
 }
 
 void blinke(int anzahl) {
@@ -102,7 +110,7 @@ void potAuswerten() {
   float roh = summe / 16.0;
 
   if (potFilter < 0) potFilter = roh;
-  else potFilter += 0.2 * (roh - potFilter);   // träger Mittelwert gegen Rauschen
+  else potFilter += 0.5 * (roh - potFilter);   // Mittelwert gegen Rauschen (pro Durchlauf)
 
   float von = ADC_MIN + TOTZONE;
   float bis = ADC_MAX - TOTZONE;
@@ -137,7 +145,7 @@ void lautstaerkeTask() {
   // 1) Start-Synchronisation: sicher auf 0 fahren
   if (!syncFertig) {
     if (millis() < START_WARTEN_MS) return;
-    if (syncRest < 0) syncRest = VOL_STUFEN + RESYNC_EXTRA;
+    if (syncRest < 0) syncRest = RADIO_STUFEN + RESYNC_EXTRA;
     sendeMitAbstand(BEFEHL_LEISER);
     syncRest--;
     if (syncRest == 0) {
@@ -157,7 +165,8 @@ void lautstaerkeTask() {
   }
 
   // 3) Am Anschlag (0 oder Maximum): Zähler gegen KaRadio-Begrenzung abgleichen
-  if (!randErledigt && (zielVol == 0 || zielVol == VOL_STUFEN)) {
+  // Am oberen Anschlag nur, wenn das Poti den ganzen KaRadio-Bereich abdeckt
+  if (!randErledigt && (zielVol == 0 || (zielVol == VOL_STUFEN && VOL_STUFEN >= RADIO_STUFEN))) {
     randRest = RESYNC_EXTRA;
     randErledigt = true;
   }
@@ -197,6 +206,15 @@ void loop() {
       }
       letzterZustand[i] = aktuell;
     }
+  }
+
+  // Nur zum Testen (Monitor, 9600 Baud): u = lauter, d = leiser, 1-6 = Sendertaste.
+  // Achtung: u/d verändern kaVol nicht -> danach Pro Mini neu starten.
+  if (DEBUG_SERIAL && Serial.available()) {
+    char c = Serial.read();
+    if (c == 'u') sendeMitAbstand(BEFEHL_LAUTER);
+    if (c == 'd') sendeMitAbstand(BEFEHL_LEISER);
+    if (c >= '1' && c <= '6') sendeMitAbstand(befehle[c - '1']);
   }
 
   lautstaerkeTask();
