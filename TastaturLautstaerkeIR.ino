@@ -32,13 +32,13 @@ const uint8_t BEFEHL_LAUTER = 0x40;
 const uint8_t BEFEHL_LEISER = 0x44;
 
 // ---- Einstellungen Lautstärke ----
-const int  VOL_STUFEN    = 30;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
+const int  VOL_STUFEN    = 20;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
 const int  RESYNC_EXTRA  = 6;     // Zusatzbefehle am Anschlag (Korrektur verlorener Impulse)
 const int  ADC_MIN       = 0;     // ADC-Wert bei Poti ganz zu
 const int  ADC_MAX       = 990;   // ADC-Wert bei Poti ganz auf (Pro Mini 3,3 V: ~990; bei 5 V: ~655)
 const int  TOTZONE       = 20;    // ADC-Werte an beiden Enden, die sicher als 0 bzw. Max gelten
-const float HYSTERESE    = 0.3;   // Poti muss 0,8 Schritte "über die Mitte" gehen, bevor das Ziel wechselt
-const unsigned long MIN_ABSTAND_MS  = 40;    // Mindestabstand zwischen IR-Telegrammen
+const float HYSTERESE    = 0.2;   // Poti muss 0,8 Schritte "über die Mitte" gehen, bevor das Ziel wechselt
+const unsigned long MIN_ABSTAND_MS  = 10;    // Mindestabstand zwischen IR-Telegrammen
 const unsigned long START_WARTEN_MS = 10000;  // so lange booten ESP32/KaRadio (Start-Sync erst danach)
 
 // ---- Zustand Lautstärke ----
