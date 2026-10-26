@@ -5,14 +5,17 @@
 // Lautstärke: Poti-Schleifer an A0 (0 ... ~3,2 V) -> Lauter/Leiser-Befehle per IR
 //
 // Anti-Drift-Konzept (IR kennt nur "lauter/leiser", keinen Absolutwert):
-//  1. Beim Start fährt der Sketch die Radio-Lautstärke einmal sicher auf 0
-//     und stellt dann die Poti-Position nach  -> beide Seiten sind synchron.
-//  2. Der Sketch zählt mit (kaVol) und schickt Schritt für Schritt die Differenz
-//     zwischen Poti-Position und gezählter Lautstärke.
-//  3. Wird Anschlag "null" oder "voll" erreicht, werden ein paar Zusatzbefehle
-//     geschickt. KaRadio begrenzt bei 0 bzw. Maximum -> verlorene Impulse
-//     werden bei jedem Anschlag automatisch korrigiert, null ist immer erreichbar.
-//  4. Mittelwert + Hysterese + Totzonen an den Enden: kein Zittern, kein Wandern.
+//  1. KaRadio ändert die Lautstärke pro IR-Befehl um 5 im Bereich 0...254 und begrenzt
+//     an den Enden. Der Sketch bildet GENAU das nach (kaVol = 0...254, Schritt 5, Begrenzung).
+//     -> Der gezählte Wert stimmt auch nach einem Vollausschlag mit KaRadio überein.
+//     (Früher: 40 Stufen angenommen, KaRadio braucht aber 51 -> die Zusatzbefehle am
+//      oberen Anschlag haben die Radio-Lautstärke jedes Mal weiter verschoben.)
+//  2. Beim Start fährt der Sketch die Radio-Lautstärke einmal sicher auf 0
+//     und stellt dann die Poti-Position nach -> beide Seiten sind synchron.
+//  3. An beiden Anschlägen (0 und 254) werden ein paar Zusatzbefehle geschickt. KaRadio
+//     begrenzt dort, der Zähler ändert sich nicht -> verlorene Impulse werden korrigiert,
+//     Minimum (0) und Maximum (254) sind immer exakt gleich.
+//  4. Mittelwert + Schaltschwelle + Totzonen an den Enden: kein Zittern, kein Wandern.
 
 const int schalterPins[6] = {4, 5, 6, 7, 8, 9};
 int letzterZustand[6];
@@ -31,25 +34,29 @@ const uint8_t befehle[6] = {0x0C, 0x18, 0x5E, 0x08, 0x1C, 0x5A};
 const uint8_t BEFEHL_LAUTER = 0x40;
 const uint8_t BEFEHL_LEISER = 0x44;
 
+// ---- KaRadio-Lautstärke (Modell) ----
+const int KA_MAX     = 254;   // KaRadio-Maximum
+const int KA_SCHRITT = 5;     // Änderung pro IR-Befehl (setRelVolume(+-5))
+const int STUFEN_VOLL = (KA_MAX + KA_SCHRITT - 1) / KA_SCHRITT;   // = 51 Befehle von 0 bis Maximum
+
 // ---- Einstellungen Lautstärke ----
-const int  VOL_STUFEN    = 40;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
 const int  RESYNC_EXTRA  = 6;     // Zusatzbefehle am Anschlag (Korrektur verlorener Impulse)
 const int  ADC_MIN       = 0;     // ADC-Wert bei Poti ganz zu
 const int  ADC_MAX       = 990;   // ADC-Wert bei Poti ganz auf (Pro Mini 3,3 V: ~990; bei 5 V: ~655)
 const int  TOTZONE       = 20;    // ADC-Werte an beiden Enden, die sicher als 0 bzw. Max gelten
-const float HYSTERESE    = 0.2;   // Poti muss 0,8 Schritte "über die Mitte" gehen, bevor das Ziel wechselt
+const float SCHALTSCHWELLE = 3.5; // Abweichung (in KaRadio-Einheiten, 0...254), ab der ein Schritt gesendet wird
+                                  // muss > 2,5 sein (halber Schritt), sonst pendelt die Lautstärke
 const unsigned long MIN_ABSTAND_MS  = 10;    // Mindestabstand zwischen IR-Telegrammen
 const unsigned long START_WARTEN_MS = 10000;  // so lange booten ESP32/KaRadio (Start-Sync erst danach)
 
 // ---- Zustand Lautstärke ----
-int  kaVol = 0;              // von uns mitgezählte KaRadio-Lautstärke (0 ... VOL_STUFEN)
-int  zielVol = 0;            // gewünschte Lautstärke laut Poti
-bool zielGesetzt = false;
-bool syncFertig = false;     // Start-Synchronisation abgeschlossen?
-int  syncRest = -1;          // verbleibende Leiser-Befehle beim Start-Sync
-bool randErledigt = false;   // Zusatzbefehle am Anschlag schon gesendet?
-int  randRest = 0;
-float potFilter = -1;        // geglätteter ADC-Wert
+int   kaVol = 0;            // nachgebildete KaRadio-Lautstärke (0 ... KA_MAX)
+float zielVol = 0;          // gewünschte Lautstärke laut Poti (0 ... KA_MAX)
+bool  syncFertig = false;   // Start-Synchronisation abgeschlossen?
+int   syncRest = -1;        // verbleibende Leiser-Befehle beim Start-Sync
+bool  randErledigt = false; // Zusatzbefehle am Anschlag schon gesendet?
+int   randRest = 0;
+float potFilter = -1;       // geglätteter ADC-Wert
 unsigned long letzteSendung = 0;
 
 void sendeByte(uint8_t b) {            // LSB zuerst
@@ -85,6 +92,19 @@ void sendeMitAbstand(uint8_t befehl) {
   letzteSendung = millis();
 }
 
+// Lauter/Leiser senden und KaRadio-Verhalten nachbilden (Schritt 5, Begrenzung 0 / 254)
+void lauter() {
+  sendeMitAbstand(BEFEHL_LAUTER);
+  kaVol += KA_SCHRITT;
+  if (kaVol > KA_MAX) kaVol = KA_MAX;
+}
+
+void leiser() {
+  sendeMitAbstand(BEFEHL_LEISER);
+  kaVol -= KA_SCHRITT;
+  if (kaVol < 0) kaVol = 0;
+}
+
 void blinke(int anzahl) {
   for (int n = 0; n < anzahl; n++) {
     digitalWrite(ledPin, HIGH);
@@ -94,7 +114,7 @@ void blinke(int anzahl) {
   }
 }
 
-// Poti lesen, glätten, in Zielstufe 0 ... VOL_STUFEN umrechnen
+// Poti lesen, glätten, in Ziel-Lautstärke 0 ... KA_MAX umrechnen
 void potAuswerten() {
   long summe = 0;
   analogRead(potPin);                          // erste Messung verwerfen (Multiplexer einschwingen)
@@ -106,23 +126,17 @@ void potAuswerten() {
 
   float von = ADC_MIN + TOTZONE;
   float bis = ADC_MAX - TOTZONE;
-  float f = (potFilter - von) * VOL_STUFEN / (bis - von);
-  if (f < 0) f = 0;
-  if (f > VOL_STUFEN) f = VOL_STUFEN;
-
-  if (!zielGesetzt) {
-    zielVol = (int)(f + 0.5);
-    zielGesetzt = true;
-  } else if (f > zielVol + 0.5 + HYSTERESE || f < zielVol - 0.5 - HYSTERESE) {
-    zielVol = (int)(f + 0.5);
-  }
+  float f = (potFilter - von) * KA_MAX / (bis - von);
+  if (f < 0) f = 0;                            // Totzone unten -> exakt 0
+  if (f > KA_MAX) f = KA_MAX;                  // Totzone oben  -> exakt Maximum
+  zielVol = f;
 
   if (DEBUG_SERIAL) {
     static unsigned long letzteAusgabe = 0;
     if (millis() - letzteAusgabe > 500) {
       letzteAusgabe = millis();
       Serial.print(F("ADC="));  Serial.print(potFilter, 0);
-      Serial.print(F(" ziel=")); Serial.print(zielVol);
+      Serial.print(F(" ziel=")); Serial.print(zielVol, 0);
       Serial.print(F(" kaVol=")); Serial.println(kaVol);
     }
   }
@@ -137,7 +151,7 @@ void lautstaerkeTask() {
   // 1) Start-Synchronisation: sicher auf 0 fahren
   if (!syncFertig) {
     if (millis() < START_WARTEN_MS) return;
-    if (syncRest < 0) syncRest = VOL_STUFEN + RESYNC_EXTRA;
+    if (syncRest < 0) syncRest = STUFEN_VOLL + RESYNC_EXTRA;
     sendeMitAbstand(BEFEHL_LEISER);
     syncRest--;
     if (syncRest == 0) {
@@ -147,22 +161,27 @@ void lautstaerkeTask() {
     return;
   }
 
-  // 2) Differenz zwischen Poti-Ziel und gezählter Lautstärke abarbeiten
-  if (kaVol != zielVol) {
-    if (kaVol < zielVol) { sendeMitAbstand(BEFEHL_LAUTER); kaVol++; }
-    else                 { sendeMitAbstand(BEFEHL_LEISER); kaVol--; }
+  // 2) Abweichung zwischen Poti-Ziel und nachgebildeter Lautstärke abarbeiten
+  //    An den Enden (Poti in der Totzone) wird exakt bis 0 bzw. Maximum gefahren,
+  //    dazwischen erst ab SCHALTSCHWELLE -> kein Pendeln.
+  bool hoch   = (zielVol >= KA_MAX) ? (kaVol < KA_MAX) : (zielVol - kaVol > SCHALTSCHWELLE);
+  bool runter = (zielVol <= 0)      ? (kaVol > 0)      : (kaVol - zielVol > SCHALTSCHWELLE);
+
+  if (hoch || runter) {
+    if (hoch) lauter(); else leiser();
     randErledigt = false;
     randRest = 0;
     return;
   }
 
   // 3) Am Anschlag (0 oder Maximum): Zähler gegen KaRadio-Begrenzung abgleichen
-  if (!randErledigt && (zielVol == 0 || zielVol == VOL_STUFEN)) {
+  bool amEnde = (zielVol <= 0) || (zielVol >= KA_MAX);
+  if (!randErledigt && amEnde) {
     randRest = RESYNC_EXTRA;
     randErledigt = true;
   }
   if (randRest > 0) {
-    sendeMitAbstand(zielVol == 0 ? BEFEHL_LEISER : BEFEHL_LAUTER);
+    sendeMitAbstand(zielVol <= 0 ? BEFEHL_LEISER : BEFEHL_LAUTER);   // KaRadio begrenzt, kaVol bleibt
     randRest--;
   }
 }
