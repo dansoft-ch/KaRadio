@@ -32,7 +32,7 @@ const uint8_t BEFEHL_LAUTER = 0x40;
 const uint8_t BEFEHL_LEISER = 0x44;
 
 // ---- Einstellungen Lautstärke ----
-const int  VOL_STUFEN    = 20;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
+const int  VOL_STUFEN    = 40;    // Anzahl Schritte von 0 bis Maximum (ggf. anpassen)
 const int  RESYNC_EXTRA  = 6;     // Zusatzbefehle am Anschlag (Korrektur verlorener Impulse)
 const int  ADC_MIN       = 0;     // ADC-Wert bei Poti ganz zu
 const int  ADC_MAX       = 990;   // ADC-Wert bei Poti ganz auf (Pro Mini 3,3 V: ~990; bei 5 V: ~655)
