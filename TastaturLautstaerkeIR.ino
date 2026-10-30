@@ -1,6 +1,6 @@
 // Tastatur + Lautstärke-Poti -> NEC-Signal direkt an ESP32-IR-Pin
 // Ausgang wie ein IR-Empfängermodul: Ruhe = HIGH, Impuls = LOW (kein 38-kHz-Träger)
-//
+// Funktionsfähige und getestete Version 30.10.2026 (Achtung: werden RX Kanal gebraucht funktioniert das nicht mit alleb Boards, da sich die UART Kanäle blockieren. Von 3 Board lief es nur bedingt auf einem!!)
 // Tasten: 6 Schalter (Pins 4-9, gegen GND) -> Sendervorwahl (unverändert)
 // Lautstärke: Poti-Schleifer an A0 (0 ... ~3,2 V) -> Lauter/Leiser-Befehle per IR
 //
@@ -16,6 +16,9 @@
 //     begrenzt dort, der Zähler ändert sich nicht -> verlorene Impulse werden korrigiert,
 //     Minimum (0) und Maximum (254) sind immer exakt gleich.
 //  4. Mittelwert + Schaltschwelle + Totzonen an den Enden: kein Zittern, kein Wandern.
+//  Pin Belegung Verstärker MAx98357A zu ESP32 WROVER
+//  grün an 25; blau an 26; rot an 5V; gelb an 22; schwarz an G
+//  Input UART an ESP32: Signal vom Spannungsteiler an RX
 
 const int schalterPins[6] = {4, 5, 6, 7, 8, 9};
 int letzterZustand[6];
