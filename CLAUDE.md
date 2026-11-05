@@ -7,7 +7,7 @@
 | **ESP32 WROVER** | Das eigentliche Radio | KaRadio32 (geflasht), Konfiguration `standard_psram_dan.csv` / `.bin` |
 | **ESP32-S3** (2 USB-Ports) | Liest Tastatur (6 Taster) und Lautstärke-Poti, schickt Befehle per UART an den WROVER | `TastaturLautstaerkeUART-S3/TastaturLautstaerkeUART-S3.ino` |
 
-Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud). Der S3 arbeitet am Port „USB“ als **USB-Host** und schickt die Befehle per USB-Kabel an den USB-Seriell-Chip des WROVER-Boards (wie vorher der serielle Monitor am PC). Treiber im Sketch für CP210x, CH340/CH341 und CDC-ACM (CH9102/CH343); DTR/RTS werden nicht gesetzt (Auto-Reset des WROVER). Der S3 muss am Port „USB“ 5 V liefern (bei vielen Boards erst nach Schließen der Lötbrücke „USB-OTG“/„IN-OUT“), sonst WROVER separat versorgen. Zusätzlich gehen die Befehle wie bisher über UART0 (`Serial0`, Port „COM“ zum Mitlesen, Pin TX0 = GPIO 43 → alternativ per Draht an RX0/GPIO 3 des WROVER, dann GND verbinden). Rückkanal (WROVER → S3) wird nicht gebraucht.
+Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud). Der S3 arbeitet am Port „USB“ als **USB-Host** und schickt die Befehle per USB-Kabel an den USB-Seriell-Chip des WROVER-Boards (wie vorher der serielle Monitor am PC). Treiber im Sketch für CP210x, CH340/CH341 und CDC-ACM (CH9102/CH343); DTR/RTS werden nicht gesetzt (Auto-Reset des WROVER). Stromversorgung: Netzteil/PC nur am Port „COM“ des S3; der S3 versorgt den WROVER über das USB-Kabel am Port „USB“ (dafür Lötbrücke „USB-OTG“ geschlossen, siehe Hardware). Zusätzlich gehen die Befehle wie bisher über UART0 (`Serial0`, Port „COM“ zum Mitlesen, Pin TX0 = GPIO 43 → alternativ per Draht an RX0/GPIO 3 des WROVER, dann GND verbinden). Rückkanal (WROVER → S3) wird nicht gebraucht.
 
 ## Dateien
 
@@ -41,6 +41,11 @@ Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als T
 - Typisch bei solchen Boards (z. B. DevKitC-1):
   - **„USB“** = native USB des S3 (USB-Serial-JTAG, GPIO 19/20)
   - **„COM“/„UART“** = USB-UART-Brücke an UART0 (TX = GPIO 43, RX = GPIO 44)
+- **Lötbrücke „USB-OTG“ ist geschlossen** (05.11.2026, funktioniert): Port „USB“ liefert jetzt 5 V und versorgt den WROVER. „IN-OUT“ bleibt offen. Folgen:
+  - Nie beide Ports des S3 gleichzeitig an PC/Netzteile hängen (zwei Stromquellen direkt verbunden).
+  - WROVER nicht zusätzlich selbst versorgen, solange das USB-Kabel zum S3 steckt.
+  - Zum Flashen nur „COM“ an den PC; das Kabel zum WROVER darf stecken bleiben.
+  - Die Quelle am COM-Port versorgt beide Boards (WROVER + VS1053 + MAX98357A bis ca. 700 mA Spitze) → Netzteil ≥ 1 A, besser 2 A. Startet der WROVER bei lauter Musik neu: Brownout, stärkeres Netzteil nehmen.
 - Wohin `Serial` ausgibt, hängt in der Arduino-IDE von **„USB CDC On Boot“** ab: aktiviert → native USB, deaktiviert → UART0 (GPIO 43). Für die Verbindung zum WROVER muss die Ausgabe auf einem echten TX-Pin landen – sicherer ist `Serial1` mit festen Pins (`Serial1.begin(115200, SERIAL_8N1, RX, TX)`).
 - Beide Boards arbeiten mit 3,3 V → kein Spannungsteiler nötig (der Hinweis im Sketch gilt nur für einen 5-V-Pro-Mini).
 - Unterschiede zum Pro Mini (in `TastaturLautstaerkeUART-S3.ino` bereits berücksichtigt):
