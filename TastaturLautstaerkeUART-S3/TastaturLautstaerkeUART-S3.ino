@@ -10,7 +10,12 @@
 //      (CP210x, CH340/CH341 oder CDC-Chip wie CH9102/CH343), 115200 Baud,
 //      genau so, wie es vorher der serielle Monitor der Arduino-IDE am PC tat.
 //   2. Zusätzlich wie bisher UART0 = USB-Port "COM" des S3 (und Pin TX0 = GPIO 43):
-//      zum Mitlesen am PC. Dort erscheinen auch Meldungen zum USB-Host.
+//      zum Mitlesen am PC. Dort erscheinen auch Meldungen zum USB-Host und die
+//      Ausgabe des WROVER (über USB mitgelesen, Zeilen mit "[WROVER] ").
+//
+// Start-Überwachung (CDC-Chip): Befehle erst nach "READY." von KaRadio. Stürzt der
+// WROVER ab, scheitert das WLAN beim Start oder kommt 30 s kein "READY", startet
+// der S3 ihn per RTS neu (höchstens 5-mal).
 //
 // Verbindung:
 //   S3-Port "USB" --(USB-Kabel, ggf. OTG-Adapter)--> USB-Port des WROVER-Boards
@@ -18,8 +23,10 @@
 //   S3-Boards ist das erst nach Schließen einer Lötbrücke ("USB-OTG", "IN-OUT")
 //   der Fall. Alternativ das WROVER-Board selbst mit Strom versorgen.
 //
-// Hinweis zu DTR/RTS: Die Leitungen des USB-Seriell-Chips werden absichtlich
-// nicht angefasst – auf ESP32-Boards hängen daran EN und GPIO0 (Auto-Reset).
+// Hinweis zu DTR/RTS: Auf ESP32-Boards hängen daran EN und GPIO0 (Auto-Reset).
+// Bei CDC-Chips (CH343 des WROVER) löst der S3 nach dem Anmelden einmal einen
+// Reset per RTS aus (GPIO0 bleibt HIGH), weil der WROVER beim gemeinsamen
+// Einschalten sonst nicht startet. Danach bleiben beide Leitungen inaktiv.
 //
 // I2S-Ausgang (Ton) – liegt am WROVER, nicht am S3 (aus standard_psram_dan.csv):
 //   WROVER GPIO 25 (P_I2S_LRCK) -> MAX98357A LRC   (Kabel grün)
@@ -70,11 +77,15 @@ const int  ADC_TOTZONE    = 60;    // Totzone an den Enden (ADC des S3 ist dort 
 const int  VOL_MAX        = 254;   // KaRadio: 0..254
 const int  VOL_HYSTERESE  = 2;     // Mindeständerung, bevor neu gesendet wird
 const unsigned long VOL_INTERVALL = 80;     // ms zwischen ADC-Auswertungen
-const unsigned long START_WARTEN  = 10000;  // ms, bis KaRadio gebootet hat
+const unsigned long START_WARTEN  = 10000;  // ms, bis KaRadio gebootet hat (nur ohne Rückkanal)
 int  letzteLautstaerke = -100;
 unsigned long letzteVolZeit = 0;
 unsigned long startZeit = 0;       // ab hier läuft START_WARTEN (neu bei USB-Verbindung)
 bool startVolumeGesendet = false;
+
+// Start-Überwachung des WROVER (nur bei CDC-Chip, dort gibt es Reset per RTS)
+const unsigned long WROVER_START_MAX = 30000;  // ms bis "READY", sonst Neustart
+const int WROVER_MAX_RESETS = 5;               // danach aufgeben
 
 // ===================== USB-Host =====================
 
@@ -87,12 +98,38 @@ static usb_transfer_t *ctrlXfer = NULL;
 static usb_transfer_t *bulkXfer = NULL;
 static uint8_t datenIntf = 0;
 static uint8_t epOut = 0;
+static uint8_t epIn = 0;
+static usb_transfer_t *inXfer = NULL;
+static volatile bool inBusy = false;
+static char wroverZeile[160];
+static int wroverLen = 0;
 static volatile uint8_t neueAdresse = 0;
 static volatile bool geraetWeg = false;
 static volatile bool ctrlFertig = false;
 static volatile bool bulkBusy = false;
 static volatile bool usbBereit = false;
 static volatile bool usbNeuVerbunden = false;
+static int kommIntfAktiv = -1;               // CDC-Interface (für Reset), -1 = kein CDC
+static volatile bool wroverBereit = false;   // KaRadio hat "READY" gemeldet
+static volatile bool wroverHaengt = false;   // Absturz oder WLAN-Fehler beim Start
+static volatile unsigned long resetZeit = 0;
+static int resetAnzahl = 0;
+
+// Zeile vom WROVER auswerten
+void wroverZeileAuswerten(const char *z) {
+  if (strstr(z, "READY.")) {
+    wroverBereit = true;
+    resetAnzahl = 0;
+  } else if (strstr(z, "rst:0x")) {             // WROVER startet (neu)
+    wroverBereit = false;
+    resetZeit = millis();
+  } else if (strstr(z, "Guru Meditation") || strstr(z, "gdb stub")) {
+    wroverBereit = false;
+    wroverHaengt = true;                        // bleibt im gdb stub stehen
+  } else if (!wroverBereit && (strstr(z, "Wifi Disconnected") || strstr(z, "Try next AP"))) {
+    wroverHaengt = true;                        // WLAN beim Start fehlgeschlagen
+  }
+}
 
 void usbClientCallback(const usb_host_client_event_msg_t *msg, void *arg) {
   if (msg->event == USB_HOST_CLIENT_EVENT_NEW_DEV) {
@@ -104,6 +141,24 @@ void usbClientCallback(const usb_host_client_event_msg_t *msg, void *arg) {
 
 void ctrlCallback(usb_transfer_t *t) { ctrlFertig = true; }
 void bulkCallback(usb_transfer_t *t) { bulkBusy = false; }
+
+// Ausgabe des WROVER (Rückkanal) zeilenweise mit "[WROVER] " auf Serial0 weitergeben
+void inCallback(usb_transfer_t *t) {
+  if (t->status == USB_TRANSFER_STATUS_COMPLETED) {
+    for (int i = 0; i < t->actual_num_bytes; i++) {
+      char c = t->data_buffer[i];
+      if (c == '\n' || wroverLen >= (int)sizeof(wroverZeile) - 1) {
+        wroverZeile[wroverLen] = '\0';
+        Serial0.printf("[WROVER] %s\r\n", wroverZeile);
+        wroverZeileAuswerten(wroverZeile);
+        wroverLen = 0;
+      } else if (c != '\r') {
+        wroverZeile[wroverLen++] = c;
+      }
+    }
+  }
+  inBusy = false;
+}
 
 // Control-Transfer an Endpunkt 0, wartet auf das Ende.
 bool steuerTransfer(uint8_t reqType, uint8_t req, uint16_t value, uint16_t index,
@@ -138,6 +193,15 @@ bool einrichtenCdc(uint8_t kommIntf) {
     0, 0, 8   // 1 Stoppbit, keine Parität, 8 Datenbits
   };
   return steuerTransfer(0x21, 0x20, 0, kommIntf, lc, sizeof(lc));
+}
+
+// WROVER neu starten wie die Arduino-IDE (Auto-Reset-Schaltung):
+// RTS aktiv + DTR inaktiv -> EN = LOW (Reset), GPIO 0 bleibt HIGH -> normaler Start.
+// Nötig, weil der WROVER beim gemeinsamen Einschalten mit dem S3 nicht von selbst startet.
+bool resetWroverCdc(uint8_t kommIntf) {
+  if (!steuerTransfer(0x21, 0x22, 0x0002, kommIntf, NULL, 0)) return false;  // RTS an
+  vTaskDelay(pdMS_TO_TICKS(100));
+  return steuerTransfer(0x21, 0x22, 0x0000, kommIntf, NULL, 0);             // beide aus
 }
 
 // Silicon Labs CP210x
@@ -181,17 +245,20 @@ void geraetEinrichten(uint8_t adresse) {
   int gesamt = cd->wTotalLength;
   int aktIntf = -1, aktAlt = 0, kommIntf = -1;
   epOut = 0;
+  epIn = 0;
   for (int i = 0; i + 1 < gesamt && p[i] >= 2; i += p[i]) {
     if (p[i + 1] == USB_B_DESCRIPTOR_TYPE_INTERFACE) {
       aktIntf = p[i + 2];
       aktAlt = p[i + 3];
       if (p[i + 5] == 0x02 && kommIntf < 0) kommIntf = aktIntf;   // CDC Communication
-    } else if (p[i + 1] == USB_B_DESCRIPTOR_TYPE_ENDPOINT && aktAlt == 0 && epOut == 0) {
+    } else if (p[i + 1] == USB_B_DESCRIPTOR_TYPE_ENDPOINT && aktAlt == 0) {
       bool bulk = (p[i + 3] & 0x03) == 0x02;
       bool raus = !(p[i + 2] & 0x80);
-      if (bulk && raus) {
+      if (bulk && raus && epOut == 0) {
         epOut = p[i + 2];
         datenIntf = aktIntf;
+      } else if (bulk && !raus && epIn == 0) {
+        epIn = p[i + 2];
       }
     }
   }
@@ -213,6 +280,12 @@ void geraetEinrichten(uint8_t adresse) {
   if (kommIntf >= 0) {
     typ = "CDC-ACM";
     ok = einrichtenCdc(kommIntf);
+    kommIntfAktiv = kommIntf;
+    wroverBereit = false;
+    wroverHaengt = false;
+    resetAnzahl = 0;
+    Serial0.printf("[USB] Reset WROVER per RTS: %s\r\n", resetWroverCdc(kommIntf) ? "ok" : "FEHLGESCHLAGEN");
+    resetZeit = millis();
   } else if (dd->idVendor == 0x10C4) {
     typ = "CP210x";
     ok = einrichtenCp210x(datenIntf);
@@ -234,6 +307,8 @@ void geraetSchliessen() {
     usb_host_interface_release(usbClient, usbGeraet, datenIntf);
     usb_host_device_close(usbClient, usbGeraet);
     usbGeraet = NULL;
+    kommIntfAktiv = -1;
+    wroverBereit = false;
     Serial0.println("[USB] Geraet getrennt");
   }
 }
@@ -254,7 +329,7 @@ void usbClientTask(void *arg) {
 
     if (geraetWeg) {
       usbBereit = false;
-      if (!bulkBusy) {          // laufenden Transfer erst zu Ende kommen lassen
+      if (!bulkBusy && !inBusy) {   // laufende Transfers erst zu Ende kommen lassen
         geraetWeg = false;
         geraetSchliessen();
       }
@@ -265,6 +340,33 @@ void usbClientTask(void *arg) {
       uint8_t a = neueAdresse;
       neueAdresse = 0;
       geraetEinrichten(a);
+    }
+
+    // Start-Überwachung: Absturz, WLAN-Fehler oder kein "READY" -> WROVER neu starten
+    if (usbBereit && kommIntfAktiv >= 0 && resetAnzahl < WROVER_MAX_RESETS) {
+      bool zeitUm = !wroverBereit && (millis() - resetZeit > WROVER_START_MAX);
+      if (wroverHaengt || zeitUm) {
+        resetAnzahl++;
+        Serial0.printf("[USB] WROVER %s -> Neustart per RTS (%d/%d)\r\n",
+                       wroverHaengt ? "abgestuerzt / kein WLAN" : "meldet kein READY",
+                       resetAnzahl, WROVER_MAX_RESETS);
+        wroverHaengt = false;
+        wroverBereit = false;
+        resetWroverCdc(kommIntfAktiv);
+        resetZeit = millis();
+      }
+    }
+
+    // Rückkanal: ständig einen IN-Transfer offen halten
+    if (usbBereit && epIn && !inBusy) {
+      inXfer->num_bytes = 64;
+      inXfer->device_handle = usbGeraet;
+      inXfer->bEndpointAddress = epIn;
+      inXfer->callback = inCallback;
+      inXfer->context = NULL;
+      inXfer->timeout_ms = 0;
+      inBusy = true;
+      if (usb_host_transfer_submit(inXfer) != ESP_OK) inBusy = false;
     }
 
     if (usbBereit && !bulkBusy && xQueueReceive(befehlQueue, &b, 0) == pdTRUE) {
@@ -314,6 +416,7 @@ void usbHostStarten() {
   }
   usb_host_transfer_alloc(64 + sizeof(usb_setup_packet_t), 0, &ctrlXfer);
   usb_host_transfer_alloc(64, 0, &bulkXfer);
+  usb_host_transfer_alloc(64, 0, &inXfer);
 
   xTaskCreatePinnedToCore(usbClientTask, "usbClient", 4096, NULL, 3, NULL, 0);
   Serial0.println("[USB] Host gestartet, warte auf WROVER am Port \"USB\"");
@@ -321,11 +424,17 @@ void usbHostStarten() {
 
 // ===================== Befehle =====================
 
+// Mit Rückkanal (CDC): erst nach "READY" von KaRadio. Sonst: feste Wartezeit.
+bool wroverBereitFuerBefehle() {
+  if (kommIntfAktiv >= 0) return wroverBereit;
+  return millis() - startZeit > START_WARTEN;
+}
+
 void sendeBefehl(const String &befehl) {
   String zeile = befehl + "\r\n";
   Serial0.print(zeile);                     // COM-Port / GPIO 43 (Mitlesen)
 
-  if (usbBereit) {                          // USB -> WROVER
+  if (usbBereit && wroverBereitFuerBefehle()) {   // USB -> WROVER
     Befehl b;
     strncpy(b.text, zeile.c_str(), sizeof(b.text) - 1);
     b.text[sizeof(b.text) - 1] = '\0';
@@ -424,16 +533,16 @@ void loop() {
     startVolumeGesendet = false;
   }
 
-  // Lautstärke: erst nach dem Boot des WROVER senden, sonst geht der Wert verloren.
-  // Die LED zeigt die Poti-Stellung aber schon vorher an.
-  if (!startVolumeGesendet) {
+  // Lautstärke: erst senden, wenn KaRadio bereit ist (nach jedem Neustart erneut),
+  // sonst geht der Wert verloren. Die LED zeigt die Poti-Stellung aber schon vorher an.
+  if (!wroverBereitFuerBefehle()) {
+    startVolumeGesendet = false;
     zeigeLautstaerke(leseLautstaerke());
-    if (millis() - startZeit > START_WARTEN) {
-      letzteLautstaerke = leseLautstaerke();
-      sendeLautstaerke(letzteLautstaerke);
-      zeigeLautstaerke(letzteLautstaerke);
-      startVolumeGesendet = true;
-    }
+  } else if (!startVolumeGesendet) {
+    letzteLautstaerke = leseLautstaerke();
+    sendeLautstaerke(letzteLautstaerke);
+    zeigeLautstaerke(letzteLautstaerke);
+    startVolumeGesendet = true;
   } else {
     pruefeLautstaerke();
   }
