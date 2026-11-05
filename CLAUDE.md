@@ -7,11 +7,11 @@
 | **ESP32 WROVER** | Das eigentliche Radio | KaRadio32 (geflasht), Konfiguration `standard_psram_dan.csv` / `.bin` |
 | **ESP32-S3** (2 USB-Ports) | Liest Tastatur (6 Taster) und Lautstärke-Poti, schickt Befehle per UART an den WROVER | `TastaturLautstaerkeUART-S3.ino` |
 
-Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud) von S3 GPIO 17 (`Serial1` TX) an RX0 (GPIO 3) des WROVER. GND beider Boards verbinden. Rückkanal (WROVER TX → S3) wird nicht gebraucht.
+Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud) über UART0 des S3 (`Serial0`, zweiter USB-Port „COM“ zum Mitlesen am PC, Pin TX0 = GPIO 43) an RX0 (GPIO 3) des WROVER. Ein USB-Kabel direkt zwischen den Boards geht nicht (kein USB-Host). GND beider Boards verbinden. Rückkanal (WROVER TX → S3) wird nicht gebraucht.
 
 ## Dateien
 
-- `TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle über `Serial1` (TX GPIO 17), Debug-Ausgabe über USB (`Serial`), Rückmeldung über die RGB-LED.
+- `TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle über `Serial0` (TX GPIO 43 / COM-Port). Die eingebaute RGB-LED (einzige steuerbare LED des Boards) zeigt beides: Farbe = gewählter Sender (rot, grün, blau, gelb, cyan, magenta; weiß vor der ersten Taste), Helligkeit = Lautstärke.
 - `TastaturLautstaerkeUART.ino` – gleiche Funktion für den Pro Mini (Vorlage für die S3-Version).
 - `TastaturLautstaerkeIR.ino` – ältere Variante (Pro Mini): Tasten + Poti als NEC-IR-Signal an `P_IR_SIGNAL`, Lautstärke nur per lauter/leiser (`K_UP` = 0xFF0040, `K_DOWN` = 0xFF0044). Lief laut Kommentar nur auf einem von drei Boards zuverlässig.
 - `TastaturCode.ino` – erste Variante (Pro Mini): nur Tasten als NEC-IR-Signal.
