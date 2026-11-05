@@ -22,6 +22,8 @@ Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als T
 - arduino-cli: `C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe` (Core esp32:esp32 3.3.x, arduino:avr)
 - arduino-cli braucht einen Ordner mit gleichem Namen wie die `.ino`. Der S3-Sketch liegt deshalb in `TastaturLautstaerkeUART-S3/` und kann direkt gebaut werden; die übrigen Sketche im Repo-Root müssten dafür in einen gleichnamigen Ordner kopiert werden.
 - S3-Sketch: FQBN `esp32:esp32:esp32s3` (Standard: „USB CDC On Boot“ aus → `Serial0` = UART0/COM-Port). Kompiliert fehlerfrei, auch mit USB-Host (Stand 05.11.2026). Der Core enthält nur `usb/usb_host.h`, keine fertigen CDC/VCP-Host-Treiber – daher eigener Mini-Treiber im Sketch.
+- **USB-Host braucht `enum_filter_cb`**: Der Core (esp32s3-libs 3.3.x, IDF 5.5) ist mit `CONFIG_USB_HOST_ENABLE_ENUM_FILTER_CALLBACK=y` gebaut. Ohne Callback bleibt die Anmeldung hängen (Port aktiv, aber kein NEW_DEV, keine Fehlermeldung). Im Sketch gesetzt (`usbEnumFilter`, gibt `true` zurück); seitdem meldet COM9 `[USB] Geraet angeschlossen: VID 1A86 PID 55D3` / `Chip: CDC-ACM, Einrichtung ok` (05.11.2026).
+- Der WROVER hat ebenfalls einen **CH343** (gleiche VID/PID wie der S3!). Hängt er am PC, erscheint er als eigener COM-Port (zuletzt COM4, Seriennummer 5C92044868; S3 = 5CE5194172). Vor dem Flashen per `Get-PnpDevice -PresentOnly -Class Ports` die Seriennummer prüfen. Blaue LED am WROVER-Board = USB vom Host angemeldet.
 - Über PowerShell aufrufen (Pfad mit Leerzeichen):
   ```
   & "C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe" compile --fqbn esp32:esp32:esp32s3 --upload -p COM9 TastaturLautstaerkeUART-S3

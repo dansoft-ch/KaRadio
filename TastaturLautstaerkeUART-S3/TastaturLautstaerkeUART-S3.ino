@@ -282,12 +282,21 @@ void usbClientTask(void *arg) {
   }
 }
 
+// Enum-Filter: lässt jedes Gerät zu (Standardkonfiguration).
+// Notwendig: Der Arduino-Core (3.3.x) ist mit CONFIG_USB_HOST_ENABLE_ENUM_FILTER_CALLBACK
+// gebaut. Ohne diesen Callback bleibt die Anmeldung des Geräts hängen – der Port wird
+// zwar aktiv, aber es kommt nie ein NEW_DEV-Ereignis (und keine Fehlermeldung).
+bool usbEnumFilter(const usb_device_desc_t *dd, uint8_t *bConfigurationValue) {
+  return true;
+}
+
 void usbHostStarten() {
   befehlQueue = xQueueCreate(16, sizeof(Befehl));
 
   usb_host_config_t hostCfg = {};
   hostCfg.skip_phy_setup = false;
   hostCfg.intr_flags = ESP_INTR_FLAG_LEVEL1;
+  hostCfg.enum_filter_cb = usbEnumFilter;
   if (usb_host_install(&hostCfg) != ESP_OK) {
     Serial0.println("[USB] usb_host_install fehlgeschlagen");
     return;
