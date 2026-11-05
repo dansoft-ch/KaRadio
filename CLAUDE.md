@@ -1,22 +1,34 @@
-# KaRadio – Projektnotizen
+﻿# KaRadio – Projektnotizen
 
 ## Aufbau (2 Boards arbeiten zusammen)
 
 | Board | Aufgabe | Software |
 |---|---|---|
 | **ESP32 WROVER** | Das eigentliche Radio | KaRadio32 (geflasht), Konfiguration `standard_psram_dan.csv` / `.bin` |
-| **ESP32-S3** (2 USB-Ports) | Liest Tastatur (6 Taster) und Lautstärke-Poti, schickt Befehle per UART an den WROVER | `TastaturLautstaerkeUART-S3.ino` |
+| **ESP32-S3** (2 USB-Ports) | Liest Tastatur (6 Taster) und Lautstärke-Poti, schickt Befehle per UART an den WROVER | `TastaturLautstaerkeUART-S3/TastaturLautstaerkeUART-S3.ino` |
 
-Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud) über UART0 des S3 (`Serial0`, zweiter USB-Port „COM“ zum Mitlesen am PC, Pin TX0 = GPIO 43) an RX0 (GPIO 3) des WROVER. Ein USB-Kabel direkt zwischen den Boards geht nicht (kein USB-Host). GND beider Boards verbinden. Rückkanal (WROVER TX → S3) wird nicht gebraucht.
+Ablauf: Taste n → `cli.play("n")`, Poti → `cli.vol("0..254")`, jeweils als Textzeile (115200 Baud). Der S3 arbeitet am Port „USB“ als **USB-Host** und schickt die Befehle per USB-Kabel an den USB-Seriell-Chip des WROVER-Boards (wie vorher der serielle Monitor am PC). Treiber im Sketch für CP210x, CH340/CH341 und CDC-ACM (CH9102/CH343); DTR/RTS werden nicht gesetzt (Auto-Reset des WROVER). Der S3 muss am Port „USB“ 5 V liefern (bei vielen Boards erst nach Schließen der Lötbrücke „USB-OTG“/„IN-OUT“), sonst WROVER separat versorgen. Zusätzlich gehen die Befehle wie bisher über UART0 (`Serial0`, Port „COM“ zum Mitlesen, Pin TX0 = GPIO 43 → alternativ per Draht an RX0/GPIO 3 des WROVER, dann GND verbinden). Rückkanal (WROVER → S3) wird nicht gebraucht.
 
 ## Dateien
 
-- `TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle über `Serial0` (TX GPIO 43 / COM-Port). Die eingebaute RGB-LED (einzige steuerbare LED des Boards) zeigt beides: Farbe = gewählter Sender (rot, grün, blau, gelb, cyan, magenta; weiß vor der ersten Taste), Helligkeit = Lautstärke.
+- `TastaturLautstaerkeUART-S3/TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle per USB-Host (Port „USB“) an den WROVER und zum Mitlesen über `Serial0` (TX GPIO 43 / COM-Port, dort auch `[USB] …`-Statusmeldungen). Die eingebaute RGB-LED (einzige steuerbare LED des Boards) zeigt beides: Farbe = gewählter Sender (rot, grün, blau, gelb, cyan, magenta; weiß vor der ersten Taste), Helligkeit = Lautstärke.
 - `TastaturLautstaerkeUART.ino` – gleiche Funktion für den Pro Mini (Vorlage für die S3-Version).
 - `TastaturLautstaerkeIR.ino` – ältere Variante (Pro Mini): Tasten + Poti als NEC-IR-Signal an `P_IR_SIGNAL`, Lautstärke nur per lauter/leiser (`K_UP` = 0xFF0040, `K_DOWN` = 0xFF0044). Lief laut Kommentar nur auf einem von drei Boards zuverlässig.
 - `TastaturCode.ino` – erste Variante (Pro Mini): nur Tasten als NEC-IR-Signal.
 - `TestUART.ino` – einfacher UART-Test (9600 Baud, gibt „test n“ aus).
 - `standard_psram_dan.csv` / `.bin` – KaRadio32-Hardware-Konfiguration (NVS-Partition) für den WROVER, inkl. IR-Codes `K_0`–`K_5` für die IR-Varianten.
+
+## Bauen und flashen (lokal, arduino-cli der Arduino IDE)
+- arduino-cli: `C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe` (Core esp32:esp32 3.3.x, arduino:avr)
+- arduino-cli braucht einen Ordner mit gleichem Namen wie die `.ino`. Der S3-Sketch liegt deshalb in `TastaturLautstaerkeUART-S3/` und kann direkt gebaut werden; die übrigen Sketche im Repo-Root müssten dafür in einen gleichnamigen Ordner kopiert werden.
+- S3-Sketch: FQBN `esp32:esp32:esp32s3` (Standard: „USB CDC On Boot“ aus → `Serial0` = UART0/COM-Port). Kompiliert fehlerfrei, auch mit USB-Host (Stand 05.11.2026). Der Core enthält nur `usb/usb_host.h`, keine fertigen CDC/VCP-Host-Treiber – daher eigener Mini-Treiber im Sketch.
+- Über PowerShell aufrufen (Pfad mit Leerzeichen):
+  ```
+  & "C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe" compile --fqbn esp32:esp32:esp32s3 --upload -p COM9 TastaturLautstaerkeUART-S3
+  ```
+- Ports: `arduino-cli board list`. **COM9 = COM-Port des S3** (CH343, VID 1A86 / PID 55D3, vom Nutzer bestätigt, Flashen dort funktioniert). Vor dem Flashen prüfen, dass wirklich der S3 an COM9 hängt, damit nicht versehentlich der WROVER (KaRadio) überschrieben wird. Serieller Monitor der IDE muss geschlossen sein.
+- Test nach dem Flashen: COM9 mit 115200 Baud mitlesen (PowerShell `System.IO.Ports.SerialPort`). Nach 10 s erscheint `cli.vol("…")`, beim Drehen am Poti bzw. Drücken einer Taste weitere Befehle.
+- Chip laut esptool: ESP32-S3 (QFN56) rev v0.2, 8 MB PSRAM eingebaut (Octal → GPIO 33–37 nicht verwenden).
 
 ## Hardware
 
