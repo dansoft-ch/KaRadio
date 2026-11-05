@@ -28,12 +28,29 @@
 // Reset per RTS aus (GPIO0 bleibt HIGH), weil der WROVER beim gemeinsamen
 // Einschalten sonst nicht startet. Danach bleiben beide Leitungen inaktiv.
 //
-// I2S-Ausgang (Ton) – liegt am WROVER, nicht am S3 (aus standard_psram_dan.csv):
-//   WROVER GPIO 25 (P_I2S_LRCK) -> MAX98357A LRC   (Kabel grün)
-//   WROVER GPIO 26 (P_I2S_BCLK) -> MAX98357A BCLK  (Kabel blau)
-//   WROVER GPIO 22 (P_I2S_DATA) -> MAX98357A DIN   (Kabel gelb)
-//   5 V                         -> MAX98357A VIN   (Kabel rot)
-//   GND                         -> MAX98357A GND   (Kabel schwarz)
+// ===================== PINOUT =====================
+// ESP32-S3 (dieser Sketch):
+//   GPIO 4 ... 9  Taste 1 ... 6 (andere Seite an GND, interner Pull-up)
+//   GPIO 1        Poti-Schleifer (Poti-Enden an 3,3 V und GND)
+//   RGB_BUILTIN   eingebaute RGB-LED (DevKitC-1: GPIO 48 bzw. 38)
+//   GPIO 43 (TX0) Befehle zum Mitlesen (Port "COM"); optional per Draht an RX0/GPIO 3
+//                 des WROVER, dann auch GND verbinden
+//   GPIO 19/20    native USB (Port "USB") = USB-Host zum WROVER, liefert 5 V
+//                 (Lötbrücke "USB-OTG" geschlossen)
+//   Nicht verwenden: GPIO 26-32 (Flash), 33-37 (Octal-PSRAM)
+//
+// ESP32 WROVER (KaRadio32, aus standard_psram_dan.csv):
+//   I2S-Verstärker MAX98357A:
+//     GPIO 25 (P_I2S_LRCK) -> LRC   (Kabel grün)   Achtung: 25/26 nicht vertauschen,
+//     GPIO 26 (P_I2S_BCLK) -> BCLK  (Kabel blau)   sonst kommt kein Ton
+//     GPIO 22 (P_I2S_DATA) -> DIN   (Kabel gelb)
+//     5 V                  -> VIN   (Kabel rot)
+//     GND                  -> GND   (Kabel schwarz)
+//     GAIN und SD offen; Lautsprecher an + und - (nicht an GND)
+//   VS1053 (optional, SPI): MISO 19, MOSI 23, CLK 18, XCS 32, XDCS 33, DREQ 34, RST 12
+//     Ist ein VS1053 angeschlossen, spielt KaRadio nur über ihn, nicht über I2S.
+//   IR-Empfänger: GPIO 21     Status-LED: GPIO 4     UART-Eingang: RX0 = GPIO 3
+//   USB: CH343 (VID 1A86 / PID 55D3) -> Kabel zum Port "USB" des S3
 //
 // Anzeige über die eingebaute RGB-LED:
 //   - Farbe      = zuletzt gewählter Sender (6 Farben, vor der ersten Taste weiß)
