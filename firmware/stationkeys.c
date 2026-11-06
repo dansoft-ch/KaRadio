@@ -103,7 +103,7 @@ static void playKey(int n)
 {
 	char s[4];
 	sprintf(s, "%d", n);
-	ESP_LOGI(TAG, "Taste %d -> Sender %d", n, n);
+	printf("stationkeys: Taste %d -> Sender %d\n", n, n);
 	playStation(s); // wie cli.play("n"), merkt sich den Sender
 }
 
@@ -168,7 +168,7 @@ void stationKeysStart(void)
 			.intr_type = GPIO_INTR_DISABLE,
 		};
 		gpio_config(&io);
-		ESP_LOGI(TAG, "Taste %d an GPIO %d", i, keyPin[i]);
+		printf("stationkeys: Taste %d an GPIO %d\n", i, keyPin[i]);
 		any = true;
 	}
 
@@ -185,7 +185,7 @@ void stationKeysStart(void)
 			potChan = ch;
 			adc1_config_width(ADC_WIDTH_BIT_12);
 			adc1_config_channel_atten(potChan, ADC_ATTEN_DB_11);
-			ESP_LOGI(TAG, "Poti an GPIO %d (ADC1 Kanal %d)", potPin, ch);
+			printf("stationkeys: Poti an GPIO %d (ADC1 Kanal %d)\n", potPin, ch);
 			any = true;
 		}
 	}

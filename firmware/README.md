@@ -56,8 +56,8 @@ Sender, WLAN-Daten und Einstellungen bleiben erhalten. Nur die Firmware und die 
 
 Seriellen Monitor (115200 Baud) am WROVER öffnen. Beim Start erscheinen:
 ```
-I (…) stationkeys: Taste 0 an GPIO 13
+stationkeys: Taste 0 an GPIO 13
 …
-I (…) stationkeys: Poti an GPIO 39 (ADC1 Kanal 3)
+stationkeys: Poti an GPIO 39 (ADC1 Kanal 3)
 ```
 Ein Tastendruck zeigt `stationkeys: Taste n -> Sender n`. Beim Drehen am Poti erscheint `##CLI.VOL#: …`.
