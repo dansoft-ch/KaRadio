@@ -110,8 +110,10 @@ static void playKey(int n)
 static void task_stationkeys(void *pvParams)
 {
 	uint8_t same[NB_KEYS] = {0};
-	bool pressed[NB_KEYS] = {false};
-	bool lastRead[NB_KEYS] = {false};
+	// Zu Beginn gilt jede Taste als gedrückt: Sie löst erst aus, wenn sie
+	// einmal losgelassen gesehen wurde (kein Fehlalarm beim Start).
+	bool pressed[NB_KEYS], lastRead[NB_KEYS];
+	for (int i = 0; i < NB_KEYS; i++) { pressed[i] = true; lastRead[i] = true; }
 	int lastVol = -1;
 	uint32_t tick = 0;
 
