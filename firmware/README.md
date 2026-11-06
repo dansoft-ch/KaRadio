@@ -1,0 +1,63 @@
+# Firmware Next Generation – KaRadio32 mit Sendertasten und Lautstärke-Poti
+
+Der WROVER liest die 6 Sendertasten und das Lautstärke-Poti selbst aus. Der ESP32-S3 wird nicht mehr gebraucht.
+
+## Was geändert ist
+
+- `stationkeys.c` / `.h`: neue Funktion in KaRadio32 (Release 2.4 R1).
+  - Taste n → Sender n (wie `cli.play("n")`). Der Sender wird gespeichert und nach dem Einschalten wieder gespielt.
+  - Poti → Lautstärke 0..254 (wie `cli.vol("n")`). In den ersten 60 s nach dem Start gewinnt immer das Poti, damit die gespeicherte Lautstärke es nicht überschreibt. Danach ändert sich die Lautstärke nur, wenn jemand am Poti dreht. Die Weboberfläche kann die Lautstärke dann weiterhin ändern.
+- `karadio.patch`: startet die neue Funktion und stellt den Absturz-Handler um. Nach einem Absturz (z. B. bei „Try next AP“) startet der WROVER jetzt neu, statt im „gdb stub“ hängen zu bleiben. Das hat bisher der S3 per RTS übernommen.
+- `standard_psram_dan_keys.csv`: eure Hardware-Konfiguration mit den neuen Einträgen. Drehgeber und I2C/LCD sind abgeschaltet, weil ihre Pins jetzt für Tasten gebraucht werden.
+
+Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware ändern (`.csv` anpassen, `.bin` neu erzeugen und flashen):
+
+| Eintrag | GPIO | Anschluss |
+|---|---|---|
+| `P_KEY0` | 13 | Taste 1 (Sender 0) gegen GND |
+| `P_KEY1` | 14 | Taste 2 (Sender 1) gegen GND |
+| `P_KEY2` | 27 | Taste 3 (Sender 2) gegen GND |
+| `P_KEY3` | 15 | Taste 4 (Sender 3) gegen GND |
+| `P_KEY4` | 5  | Taste 5 (Sender 4) gegen GND |
+| `P_KEY5` | 2  | Taste 6 (Sender 5) gegen GND |
+| `P_VOL_POT` | 39 (VN / SVN) | Poti-Schleifer; Poti-Enden an 3,3 V und GND |
+
+- Die Tasten brauchen keinen Widerstand (interner Pull-up). `255` = Taste nicht benutzt.
+- Das Poti nur an einen ADC1-Pin hängen (32–39, frei sind 35, 36 und 39). ADC2-Pins funktionieren bei aktivem WLAN nicht.
+- Poti **an 3,3 V, nicht an 5 V**.
+- GPIO 2, 5 und 15 sind Boot-Pins. Beim Einschalten keine Taste gedrückt halten.
+
+## Bauen
+
+GitHub Actions baut bei jedem Push in `firmware/` automatisch (Workflow „Firmware“). Ergebnis ist das Artefakt **karadio32-firmware**:
+`bootloader.bin`, `partitions.bin`, `KaRadio32.bin`, `standard_psram_dan_keys.bin`, `flash.ps1`.
+
+Herunterladen:
+```
+gh run download --name karadio32-firmware --dir firmware\out
+```
+
+## Flashen
+
+1. WROVER direkt per USB an den PC hängen (S3-Kabel abziehen, siehe Stromversorgung in `CLAUDE.md`).
+2. COM-Port des WROVER suchen (Seriennummer 5C92044868, zuletzt COM4):
+   `Get-PnpDevice -PresentOnly -Class Ports`
+3. Im Ordner mit den Dateien:
+   ```
+   powershell -ExecutionPolicy Bypass -File .\flash.ps1 -Port COM4
+   ```
+   Das Skript prüft die Seriennummer und bricht ab, wenn der S3 dranhängt. Es nutzt `esptool.exe` aus der Arduino IDE.
+
+Sender, WLAN-Daten und Einstellungen bleiben erhalten. Nur die Firmware und die Hardware-Konfiguration werden neu geschrieben.
+
+**Zurück zur alten Firmware:** `KaRadio32.bin` von karawin flashen (0x10000) und die alte `standard_psram_dan.bin` an 0x3a2000.
+
+## Testen
+
+Seriellen Monitor (115200 Baud) am WROVER öffnen. Beim Start erscheinen:
+```
+I (…) stationkeys: Taste 0 an GPIO 13
+…
+I (…) stationkeys: Poti an GPIO 39 (ADC1 Kanal 3)
+```
+Ein Tastendruck zeigt `stationkeys: Taste n -> Sender n`. Beim Drehen am Poti erscheint `##CLI.VOL#: …`.

@@ -30,6 +30,7 @@
 
 extern const char hardware[];   // aus gpio.c
 extern const char gpio_space[];
+extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 
 #define NB_KEYS        6
 #define LOOP_MS        10      // Abfrage-Takt
