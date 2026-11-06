@@ -1,0 +1,84 @@
+# Baut KaRadio32 mit unserer Ergänzung (Sendertasten + Lautstärke-Poti, firmware/).
+# Ergebnis: Artefakt "karadio32-firmware" mit allen .bin-Dateien zum Flashen.
+name: Firmware
+
+on:
+  push:
+    paths:
+      - "firmware/**"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+env:
+  KARADIO_REPO: https://github.com/karawin/Ka-Radio32
+  KARADIO_COMMIT: b2b4574c564caead1b03fb4bfa8224e09d3e0cd6   # Release 2.4 R1, Stand 02.11.2026
+  IDF_VERSION: v3.3.6
+  TOOLCHAIN: xtensa-esp32-elf-linux64-1.22.0-97-gc752ad5-5.2.0.tar.gz
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # ESP-IDF 3.3 braucht eine alte Python-Version (pyparsing < 2.4, cryptography < 35)
+    container: ubuntu:20.04
+    steps:
+      - name: Pakete installieren
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y git wget make gcc flex bison gperf libncurses-dev \
+            python3 python3-pip python-is-python3 ca-certificates
+
+      - uses: actions/checkout@v4
+
+      - name: Ka-Radio32 holen und anpassen
+        run: |
+          mkdir karadio && cd karadio
+          git init -q
+          git fetch -q --depth 1 "$KARADIO_REPO" "$KARADIO_COMMIT"
+          git checkout -q FETCH_HEAD
+          git apply --verbose ../firmware/karadio.patch
+          cp ../firmware/stationkeys.c main/
+          cp ../firmware/stationkeys.h main/include/
+          # sdkconfig muss neuer sein als sdkconfig.defaults, sonst überschreibt das Makefile sie
+          touch sdkconfig
+
+      - name: ESP-IDF und Toolchain holen
+        run: |
+          mkdir -p "$HOME/esp" && cd "$HOME/esp"
+          wget -q "https://dl.espressif.com/dl/$TOOLCHAIN"
+          tar -xzf "$TOOLCHAIN"
+          git clone -q -b "$IDF_VERSION" --depth 1 --recursive --shallow-submodules \
+            https://github.com/espressif/esp-idf.git
+          python -m pip install -q -r esp-idf/requirements.txt
+          # Patch laut Ka-Radio32-README (CONFIG_SPIRAM_IGNORE_NOTFOUND)
+          perl -0pi -e 's/(esp_spiram_get_chip_size\(\)\s*\{\s*if \(!spiram_inited\) \{\n)(\s*ESP_EARLY_LOGE\(TAG, "SPI RAM not initialized"\);\n)(\s*abort\(\);)/$1#if CONFIG_SPIRAM_IGNORE_NOTFOUND\n$2        return ESP_SPIRAM_SIZE_INVALID;\n#endif\n$3/' \
+            esp-idf/components/esp32/spiram.c
+          grep -q "return ESP_SPIRAM_SIZE_INVALID;" esp-idf/components/esp32/spiram.c
+
+      - name: Bauen
+        run: |
+          export IDF_PATH="$HOME/esp/esp-idf"
+          export PATH="$HOME/esp/xtensa-esp32-elf/bin:$PATH"
+          cd karadio
+          make -j"$(nproc)" all BATCH_BUILD=1
+
+      - name: Hardware-Konfiguration erzeugen
+        run: |
+          mkdir -p out
+          python karadio/boards/nvs_partition_gen.py --version v1 \
+            --input firmware/standard_psram_dan_keys.csv \
+            --output out/standard_psram_dan_keys.bin --size 0x3000
+
+      - name: Dateien sammeln
+        run: |
+          cp karadio/build/bootloader/bootloader.bin out/
+          cp karadio/build/partitions.bin out/
+          cp karadio/build/KaRadio32.bin out/
+          cp firmware/flash.ps1 out/
+          ls -l out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: karadio32-firmware
+          path: out/

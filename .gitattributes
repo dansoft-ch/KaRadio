@@ -1,0 +1,2 @@
+firmware/*.patch text eol=lf
+firmware/*.csv text eol=lf

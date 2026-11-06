@@ -1,0 +1,47 @@
+diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
+index 5052a47..370d9c4 100644
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -1,5 +1,6 @@
+ set(COMPONENT_SRCS 		
+ 	"addon.c"
++	"stationkeys.c"
+ 	"addoncommon.c"
+ 	"addonu8g2.c"
+ 	"addonucg.c"
+diff --git a/main/app_main3.h b/main/app_main3.h
+index 1639154..09bbc9c 100644
+--- a/main/app_main3.h
++++ b/main/app_main3.h
+@@ -27,6 +27,7 @@ Copyright (C) 2017  KaraWin
+ #include <string.h>
+ #include <stdbool.h>
+ #include <nvs.h>
++#include "stationkeys.h"
+ #include "freertos/FreeRTOS.h"
+ #include "freertos/task.h"
+ #include "freertos/event_groups.h"
+@@ -1145,6 +1146,7 @@ void app_main()
+ 	vTaskDelay(1);
+ 	xTaskCreatePinnedToCore (task_addon, "task_addon", 2200, NULL, PRIO_ADDON, &pxCreatedTask,CPU_ADDON);  
+ 	ESP_LOGI(TAG, "%s task: %x","task_addon",(unsigned int)pxCreatedTask);	
++	stationKeysStart(); // Sendertasten + Lautstaerke-Poti (dansoft-ch)
+ 
+ 	vTaskDelay(60);// wait tasks init
+ 	ESP_LOGI(TAG," Init Done");
+diff --git a/sdkconfig b/sdkconfig
+index 8441d22..7f78ec2 100644
+--- a/sdkconfig
++++ b/sdkconfig
+@@ -298,9 +298,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
+ CONFIG_ULP_COPROC_ENABLED=
+ CONFIG_ULP_COPROC_RESERVE_MEM=0
+ CONFIG_ESP32_PANIC_PRINT_HALT=
+-CONFIG_ESP32_PANIC_PRINT_REBOOT=
++CONFIG_ESP32_PANIC_PRINT_REBOOT=y
+ CONFIG_ESP32_PANIC_SILENT_REBOOT=
+-CONFIG_ESP32_PANIC_GDBSTUB=y
++CONFIG_ESP32_PANIC_GDBSTUB=
+ CONFIG_GDBSTUB_SUPPORT_TASKS=y
+ CONFIG_GDBSTUB_MAX_TASKS=32
+ CONFIG_ESP32_DEBUG_OCDAWARE=
