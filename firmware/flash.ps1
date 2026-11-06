@@ -13,13 +13,13 @@ $esptool = Get-ChildItem "$env:LOCALAPPDATA\Arduino15\packages\esp32\tools\espto
     Sort-Object FullName -Descending | Select-Object -First 1
 if (-not $esptool) { throw "esptool.exe nicht gefunden (kommt mit dem ESP32-Core der Arduino IDE)." }
 
-# Sicherheitsabfrage: ist am Port wirklich der WROVER (CH343, Seriennummer 5C92044868)?
+# Sicherheitsabfrage: ist am Port wirklich der WROVER (CH343, Seriennummer 5C92044868 alt / 5C92044814 neu)?
 $dev = Get-PnpDevice -PresentOnly -Class Ports | Where-Object { $_.FriendlyName -match "\($Port\)" }
 if (-not $dev) { throw "$Port nicht gefunden." }
 Write-Host "Geraet an ${Port}: $($dev.FriendlyName)  [$($dev.InstanceId)]"
 if ($dev.InstanceId -match '5CE5194172') { throw "$Port ist der ESP32-S3, nicht der WROVER. Abbruch." }
-if ($dev.InstanceId -notmatch '5C92044868') {
-    $a = Read-Host "Seriennummer des WROVER (5C92044868) nicht erkannt. Trotzdem flashen? (j/n)"
+if ($dev.InstanceId -notmatch '5C92044868|5C92044814') {
+    $a = Read-Host "Seriennummer des WROVER (5C92044868 alt, 5C92044814 neu) nicht erkannt. Trotzdem flashen? (j/n)"
     if ($a -ne 'j') { exit 1 }
 }
 

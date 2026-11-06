@@ -15,6 +15,8 @@ Start-Ablauf (nur CDC, getestet 05.11.2026): Der WROVER startet beim gemeinsamen
 
 Alternative ohne S3: KaRadio32 selbst liest Tasten und Poti (`firmware/`, Anleitung in `firmware/README.md`). Neue NVS-Einträge `P_KEY0..5` (Tasten gegen GND, GPIO 13, 14, 27, 15, 5, 2) und `P_VOL_POT` (GPIO 39, nur ADC1). Gebaut wird per GitHub Actions (`.github/workflows/firmware.yml`, Ubuntu-20.04-Container, ESP-IDF 3.3.6, Ka-Radio32 auf festem Commit + `firmware/karadio.patch`), weil auf dem PC kein ESP-IDF/Python installiert ist. Flashen mit `firmware/flash.ps1 -Port COMx` (esptool aus Arduino15, prüft die Seriennummer des WROVER).
 
+**Neues WROVER-Board für Firmware NG** (06.11.2026): CH343-Seriennummer **5C92044814**, COM10, ESP32-D0WD-V3, 16 MB Flash. Ab Werk lag ein Testsketch „ESP32-WROOM-32E“ drauf. Komplett gelöscht und mit Firmware NG + `standard_psram_dan_keys.bin` geflasht (flash.ps1 kennt beide WROVER-Seriennummern). Getestet: alle 6 Tasten und Poti (GPIO 39) werden erkannt, die Lautstärke folgt dem Poti, kein VS1053 erkannt (Ausgabe über I2S). WLAN und Senderliste sind noch leer: AP „WifiKaRadio“, http://192.168.4.1.
+
 ## Dateien
 
 - `TastaturLautstaerkeUART-S3/TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle per USB-Host (Port „USB“) an den WROVER und zum Mitlesen über `Serial0` (TX GPIO 43 / COM-Port, dort auch `[USB] …`-Statusmeldungen). Die eingebaute RGB-LED (einzige steuerbare LED des Boards) zeigt beides: Farbe = gewählter Sender (rot, grün, blau, gelb, cyan, magenta; weiß vor der ersten Taste), Helligkeit = Lautstärke.
