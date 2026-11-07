@@ -65,6 +65,18 @@ gh run download --name karadio32-firmware --dir firmware\out
 
 Sender, WLAN-Daten und Einstellungen bleiben erhalten. Nur die Firmware und die Hardware-Konfiguration werden neu geschrieben.
 
+**Mit dem Espressif Flash Download Tool** (ChipType ESP32, SPI 40 MHz, DIO, „DoNotChgBin“ an), Dateien aus `firmware/bin/`:
+
+| Adresse | Datei |
+|---|---|
+| 0x1000 | `bootloader.bin` |
+| 0x8000 | `partitions.bin` |
+| 0xd000 | `otadata_blank.bin` (8 KB 0xFF, ersetzt das Löschen von otadata in `flash.ps1`) |
+| 0x10000 | `KaRadio32.bin` |
+| 0x3a2000 | `standard_psram_dan_keys.bin` |
+
+Nicht mehr an 0x1D0000 flashen (beim Original-KaRadio die zweite App-Partition, hier mitten in der Firmware). ERASE löscht den ganzen Flash inkl. WLAN und Senderliste. Ausführlich: zweite Seite im Factsheet `KaRadio-Factsheet-FirmwareNG-BT.docx`.
+
 **Zurück zur alten Firmware:** `KaRadio32.bin` von karawin flashen (0x10000) und die alte `standard_psram_dan.bin` an 0x3a2000.
 
 ## Testen
