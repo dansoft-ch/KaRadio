@@ -19,13 +19,23 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 | `P_KEY2` | 27 | Taste 3 (Sender 2) gegen GND |
 | `P_KEY3` | 15 | Taste 4 (Sender 3) gegen GND |
 | `P_KEY4` | 5  | Taste 5 (Sender 4) gegen GND |
-| `P_KEY5` | 2  | Taste 6 (Sender 5) gegen GND |
+| `P_KEY5` | 2 → im Branch `firmware-ng-bt`: 255 | Taste 6 (Sender 5) gegen GND |
+| `P_KEY_BT` | 2 (nur `firmware-ng-bt`) | Taste 6 = Bluetooth (Rasttaste) gegen GND |
 | `P_VOL_POT` | 39 (VN / SVN) | Poti-Schleifer; Poti-Enden an 3,3 V und GND |
+| `P_MUTE_POT` | 36 (VP / SVP, nur `firmware-ng-bt`) | Schleifer des Ein/Aus-Knopf-Potis; Enden an 3,3 V und GND; 100 kΩ nach 3,3 V |
 
 - Die Tasten brauchen keinen Widerstand (interner Pull-up). `255` = Taste nicht benutzt.
 - Das Poti nur an einen ADC1-Pin hängen (32–39, frei sind 35, 36 und 39). ADC2-Pins funktionieren bei aktivem WLAN nicht.
 - Poti **an 3,3 V, nicht an 5 V**.
 - GPIO 2, 5 und 15 sind Boot-Pins. Beim Einschalten keine Taste gedrückt halten.
+
+## Bluetooth-Lautsprecher und Mute (Branch `firmware-ng-bt`)
+
+- `btspeaker.c` / `.h`: Das Radio ist per Bluetooth als **„Biennophone“** sichtbar (A2DP-Sink, Koppeln ohne PIN). Der Ton geht wie beim Radio über I2S an den MAX98357A. Lautstärke-Poti und Mute wirken auch hier. Nur mit I2S-Ausgang, nicht mit VS1053.
+- **Bluetooth-Taste** (`P_KEY_BT`, GPIO 2, früher Taste 6 / `P_KEY5`): Rasttaste. Eingerastet → Radio stoppt, Bluetooth sichtbar. Eine Sendertaste schaltet zurück aufs Radio. Ist beim Einschalten die Bluetooth-Taste eingerastet, startet das Gerät gleich im Bluetooth-Betrieb.
+- **Mute-Poti** (`P_MUTE_POT`, GPIO 36): Schleifer des originalen Ein/Aus-Knopfs. Es zählt die Drehrichtung: ca. 5 % aufdrehen → Mute aus, ca. 5 % zudrehen → Mute an. Nach dem Einschalten ist Mute aus.
+  - GPIO 36 hat **keinen eingebauten Pull-up** (gilt für GPIO 34–39). Damit ein fehlendes Mute-Poti nichts auslöst, einen **Widerstand 100 kΩ von GPIO 36 nach 3,3 V** fest einlöten, oder `P_MUTE_POT` auf `255` setzen. Bei GPIO 32/33 schaltet die Firmware den internen Pull-up selbst ein.
+- Die App-Partition ist auf 3,5 MB vergrössert (Bluetooth braucht Platz); dafür gibt es kein Web-Update (OTA) mehr. Sender, WLAN-Daten und Hardware-Konfiguration liegen an derselben Adresse wie bisher und bleiben erhalten. `flash.ps1` schreibt die neue Partitionstabelle mit.
 
 ## Bauen
 
@@ -61,3 +71,14 @@ stationkeys: Taste 0 an GPIO 13
 stationkeys: Poti an GPIO 39 (ADC1 Kanal 3)
 ```
 Ein Tastendruck zeigt `stationkeys: Taste n -> Sender n`. Beim Drehen am Poti erscheint `##CLI.VOL#: …`.
+
+Bluetooth und Mute (`firmware-ng-bt`):
+```
+stationkeys: Bluetooth-Taste an GPIO 2
+stationkeys: Mute-Poti an GPIO 36 (ADC1 Kanal 0)
+btspeaker: Bluetooth-Betrieb, freier Speicher …      (Taste 6 eingerastet)
+btspeaker: sichtbar als "Biennophone"
+btspeaker: Handy verbunden / Wiedergabe startet (44100 Hz)
+stationkeys: Mute an / Mute aus                       (Ein/Aus-Knopf gedreht)
+btspeaker: Bluetooth aus, zurueck zum Radio           (Sendertaste)
+```

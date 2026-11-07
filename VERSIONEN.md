@@ -82,5 +82,10 @@ Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter*
 - Knopf um ca. 5 % **zudrehen** (Spannung sinkt) → Mute an.
 - Es zählt die **Drehrichtung**, nicht die Stellung. Nach dem Einschalten ist Mute aus.
 - Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt.
+- Das Mute-Poti muss nicht angeschlossen sein. GPIO 36 hat aber keinen eingebauten Pull-up: dafür **100 kΩ von GPIO 36 nach 3,3 V** fest einlöten (oder `P_MUTE_POT` = 255).
+
+### Wichtig beim Wechsel zwischen v1 und Bluetooth-Version
+
+Die Bluetooth-Version braucht eine grössere App-Partition (Partitionstabelle geändert, kein Web-Update/OTA mehr). Sender, WLAN und Hardware-Konfiguration bleiben an derselben Stelle. Beim Zurückwechseln auf `firmware-ng-v1` immer **alle** Dateien aus dem Release flashen (`flash.ps1` macht das), damit auch die alte Partitionstabelle zurückkommt.
 
 - Eingerastete Tasten beim Einschalten sind unkritisch: GPIO 2, 5 und 15 stören nur beim Flashen bzw. unterdrücken die Startmeldungen. Zum Flashen sicherheitshalber Taste 1 (GPIO 13) einrasten.

@@ -19,6 +19,8 @@ Alternative ohne S3: KaRadio32 selbst liest Tasten und Poti (`firmware/`, Anleit
 
 **Versionen** (07.11.2026): Stabiler Stand von `firmware-ng` gesichert als Tag/Release `firmware-ng-v1` (Release wird von GitHub Actions bei Tags `firmware-ng-v*` angelegt). Bluetooth-Lautsprecher (A2DP-Sink, Taste 6 = BT) wird im Branch `firmware-ng-bt` entwickelt; `firmware-ng` bleibt solange unverändert. Übersicht für Menschen: `VERSIONEN.md`.
 
+**Stand `firmware-ng-bt`** (07.11.2026, gebaut, noch nicht geflasht/getestet): `firmware/btspeaker.c` (A2DP-Sink „Biennophone“, Ton über `render_samples`), Rasttaste `P_KEY_BT` = GPIO 2 (statt `P_KEY5`), Mute-Poti `P_MUTE_POT` = GPIO 36 nach Drehrichtung (±5 %, Mute in `audio_renderer.c` per `renderer_set_mute`). Patch sperrt `clientConnect*` im BT-Betrieb, schaltet BT in `sdkconfig` ein (IDF-3.3-Namen: `CONFIG_CLASSIC_BT_ENABLED`, `CONFIG_A2DP_ENABLE`, `CONFIG_BTDM_CONTROLLER_MODE_BR_EDR_ONLY`) und vergrössert `ota_0` auf 0x380000 (ota_1 entfernt, übrige Offsets gleich). Patch neu erzeugen: Ka-Radio32 mit `core.eol=lf` auschecken (das Repo hat sonst CRLF im Arbeitsverzeichnis), Änderungen machen, `git diff > firmware/karadio.patch`.
+
 ## Dateien
 
 - `TastaturLautstaerkeUART-S3/TastaturLautstaerkeUART-S3.ino` – **aktuelle Lösung für den S3**: Tasten GPIO 4–9, Poti GPIO 1, Befehle per USB-Host (Port „USB“) an den WROVER und zum Mitlesen über `Serial0` (TX GPIO 43 / COM-Port, dort auch `[USB] …`-Statusmeldungen). Die eingebaute RGB-LED (einzige steuerbare LED des Boards) zeigt beides: Farbe = gewählter Sender (rot, grün, blau, gelb, cyan, magenta; weiß vor der ersten Taste), Helligkeit = Lautstärke.
