@@ -37,6 +37,8 @@ jobs:
             python3 python3-pip python-is-python3 ca-certificates
 
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Ka-Radio32 holen und anpassen
         run: |
@@ -89,6 +91,22 @@ jobs:
         with:
           name: karadio32-firmware
           path: out/
+
+      # Fertige .bin-Dateien in den Branch legen (firmware/bin/), damit sie
+      # nach "git pull" lokal liegen. Commits mit GITHUB_TOKEN starten keinen neuen Build.
+      - name: Firmware in den Branch legen (nur bei Branch-Push)
+        if: github.ref_type == 'branch'
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898729+github-actions[bot]@users.noreply.github.com"
+          mkdir -p firmware/bin
+          cp out/*.bin firmware/bin/
+          git add firmware/bin
+          git commit -m "Firmware-Build fuer ${GITHUB_SHA::7} (automatisch)" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
 
       - name: Release anlegen (nur bei Tag)
         if: startsWith(github.ref, 'refs/tags/firmware-ng-v')

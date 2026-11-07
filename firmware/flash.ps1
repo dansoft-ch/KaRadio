@@ -1,5 +1,6 @@
 # Flasht die neue KaRadio32-Firmware (mit Sendertasten + Poti) auf den WROVER.
-# Aufruf im Ordner mit den .bin-Dateien (GitHub-Artefakt "karadio32-firmware"):
+# Die .bin-Dateien liegen neben dem Skript (Release/Artefakt) oder im Repo unter firmware\bin
+# (legt GitHub Actions nach jedem Build dort ab, holen mit "git pull"):
 #   powershell -ExecutionPolicy Bypass -File .\flash.ps1 -Port COM4
 # Sender, WLAN-Daten und Einstellungen bleiben erhalten.
 param(
@@ -7,7 +8,10 @@ param(
     [switch]$OhneKonfig   # nur die Firmware, Hardware-Konfiguration nicht neu schreiben
 )
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
+if (Test-Path "$PSScriptRoot\KaRadio32.bin") { Set-Location $PSScriptRoot }
+elseif (Test-Path "$PSScriptRoot\bin\KaRadio32.bin") { Set-Location "$PSScriptRoot\bin" }
+else { throw "KaRadio32.bin nicht gefunden (weder neben flash.ps1 noch in bin\)." }
+Write-Host "Firmware-Dateien aus $(Get-Location)"
 
 $esptool = Get-ChildItem "$env:LOCALAPPDATA\Arduino15\packages\esp32\tools\esptool_py" -Recurse -Filter esptool.exe |
     Sort-Object FullName -Descending | Select-Object -First 1
