@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700" width="1100" height="700" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="aBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1F6FD1"/></marker>
+    <marker id="aPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8A3FD1"/></marker>
+    <marker id="aGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1E8A5A"/></marker>
+    <marker id="aGray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6B7280"/></marker>
+    <style>
+      .box  { fill:#F5F7FB; stroke:#9AA7BA; stroke-width:1.2; }
+      .ext  { fill:#FFFFFF; stroke:#9AA7BA; stroke-width:1.2; }
+      .t    { font-size:14px; fill:#1A1F2B; font-weight:600; }
+      .s    { font-size:12px; fill:#4A5568; }
+      .lbl  { font-size:11.5px; fill:#4A5568; font-style:italic; }
+      .blue { stroke:#1F6FD1; stroke-width:3; fill:none; marker-end:url(#aBlue); }
+      .purp { stroke:#8A3FD1; stroke-width:3; fill:none; marker-end:url(#aPurple); }
+      .grn  { stroke:#1E8A5A; stroke-width:3; fill:none; marker-end:url(#aGreen); }
+      .gray { stroke:#6B7280; stroke-width:2; fill:none; stroke-dasharray:6 4; marker-end:url(#aGray); }
+    </style>
+  </defs>
+
+  <!-- Hintergrund (fest hell, damit es auch im dunklen GitHub-Modus lesbar ist) -->
+  <rect x="0" y="0" width="1100" height="700" rx="16" fill="#FFFFFF"/>
+  <text x="550" y="40" text-anchor="middle" font-size="24" font-weight="700" fill="#1F4A7A">Biennophone – Vintage-Radio mit Internetradio und Bluetooth</text>
+  <text x="550" y="64" text-anchor="middle" class="s">Ein ESP32 erledigt alles: Radio-Stream, Bluetooth-Lautsprecher, Tasten und Knöpfe des Originalgeräts</text>
+
+  <!-- Quellen links -->
+  <rect class="ext" x="30" y="95" width="220" height="62" rx="10"/>
+  <text class="t" x="140" y="121" text-anchor="middle">Internet-Radio</text>
+  <text class="s" x="140" y="140" text-anchor="middle">z. B. SRF 1 · Stream AAC / MP3</text>
+
+  <rect class="ext" x="30" y="195" width="220" height="62" rx="10"/>
+  <text class="t" x="140" y="221" text-anchor="middle">WLAN</text>
+  <text class="s" x="140" y="240" text-anchor="middle">Router zu Hause · Handy-Hotspot</text>
+
+  <rect class="ext" x="30" y="300" width="220" height="92" rx="10"/>
+  <text class="t" x="140" y="324" text-anchor="middle">Bedienteile des Originals</text>
+  <text class="s" x="140" y="344" text-anchor="middle">6 Rasttasten (Sender 1–6)</text>
+  <text class="s" x="140" y="361" text-anchor="middle">Lautstärke-Knopf (Poti)</text>
+  <text class="s" x="140" y="378" text-anchor="middle">Ein/Aus-Knopf: Poti = Mute</text>
+
+  <rect class="ext" x="30" y="460" width="220" height="62" rx="10"/>
+  <text class="t" x="140" y="486" text-anchor="middle">Smartphone</text>
+  <text class="s" x="140" y="505" text-anchor="middle">Bluetooth A2DP (SBC)</text>
+
+  <!-- ESP32 -->
+  <rect x="290" y="88" width="510" height="470" rx="14" fill="#EEF2F8" stroke="#1F4A7A" stroke-width="2"/>
+  <text x="545" y="112" text-anchor="middle" font-size="15" font-weight="700" fill="#1F4A7A">ESP32-WROVER · KaRadio32 + Firmware NG</text>
+
+  <rect class="box" x="310" y="130" width="140" height="56" rx="8"/>
+  <text class="t" x="380" y="153" text-anchor="middle">WLAN-Empfang</text>
+  <text class="s" x="380" y="171" text-anchor="middle">HTTP-Stream</text>
+
+  <rect class="box" x="470" y="130" width="140" height="56" rx="8"/>
+  <text class="t" x="540" y="153" text-anchor="middle">Puffer</text>
+  <text class="s" x="540" y="171" text-anchor="middle">im PSRAM (4 MB)</text>
+
+  <rect class="box" x="630" y="130" width="150" height="56" rx="8"/>
+  <text class="t" x="705" y="153" text-anchor="middle">Decoder</text>
+  <text class="s" x="705" y="171" text-anchor="middle">AAC (fdk) · MP3 (mad)</text>
+
+  <rect class="box" x="310" y="310" width="140" height="70" rx="8"/>
+  <text class="t" x="380" y="335" text-anchor="middle">stationkeys</text>
+  <text class="s" x="380" y="353" text-anchor="middle">Tasten entprellen,</text>
+  <text class="s" x="380" y="369" text-anchor="middle">Potis messen (ADC1)</text>
+
+  <rect x="470" y="290" width="150" height="110" rx="8" fill="#FFF7E6" stroke="#D9A441" stroke-width="1.5"/>
+  <text class="t" x="545" y="315" text-anchor="middle">Umschalter</text>
+  <text class="s" x="545" y="334" text-anchor="middle">btspeaker</text>
+  <text class="s" x="545" y="354" text-anchor="middle">Handy spielt → Bluetooth</text>
+  <text class="s" x="545" y="371" text-anchor="middle">Pause 15 s / getrennt</text>
+  <text class="s" x="545" y="387" text-anchor="middle">oder Sendertaste → Radio</text>
+
+  <rect class="box" x="640" y="300" width="140" height="90" rx="8"/>
+  <text class="t" x="710" y="325" text-anchor="middle">Ausgabe</text>
+  <text class="s" x="710" y="344" text-anchor="middle">Lautstärke</text>
+  <text class="s" x="710" y="361" text-anchor="middle">Mute</text>
+  <text class="s" x="710" y="378" text-anchor="middle">I2S (digital)</text>
+
+  <rect class="box" x="310" y="465" width="140" height="56" rx="8"/>
+  <text class="t" x="380" y="488" text-anchor="middle">Bluetooth Classic</text>
+  <text class="s" x="380" y="506" text-anchor="middle">„Biennophone“</text>
+
+  <rect class="box" x="470" y="465" width="150" height="56" rx="8"/>
+  <text class="t" x="545" y="488" text-anchor="middle">A2DP-Sink</text>
+  <text class="s" x="545" y="506" text-anchor="middle">SBC → PCM</text>
+
+  <!-- Verstärker und Lautsprecher rechts -->
+  <rect class="ext" x="850" y="300" width="220" height="90" rx="10"/>
+  <text class="t" x="960" y="326" text-anchor="middle">MAX98357A</text>
+  <text class="s" x="960" y="345" text-anchor="middle">I2S-Verstärker, 3 W</text>
+  <text class="s" x="960" y="362" text-anchor="middle">GPIO 25 / 26 / 22</text>
+
+  <rect class="ext" x="850" y="430" width="220" height="62" rx="10"/>
+  <text class="t" x="960" y="456" text-anchor="middle">Lautsprecher</text>
+  <text class="s" x="960" y="475" text-anchor="middle">des Biennophone</text>
+
+  <!-- Radio-Fluss (blau) -->
+  <path class="blue" d="M140,157 V193"/>
+  <path class="blue" d="M250,226 H275 V158 H308"/>
+  <path class="blue" d="M450,158 H468"/>
+  <path class="blue" d="M610,158 H628"/>
+  <path class="blue" d="M705,186 V240 H580 V288"/>
+
+  <!-- Bluetooth-Fluss (violett) -->
+  <path class="purp" d="M250,491 H308"/>
+  <path class="purp" d="M450,493 H468"/>
+  <path class="purp" d="M545,465 V402"/>
+
+  <!-- Gemeinsamer Ausgang (grün) -->
+  <path class="grn" d="M620,345 H638"/>
+  <path class="grn" d="M780,345 H848"/>
+  <path class="grn" d="M960,390 V428"/>
+
+  <!-- Bedienung (grau) -->
+  <path class="gray" d="M250,346 H308"/>
+  <path class="gray" d="M450,345 H468"/>
+  <path class="gray" d="M380,380 V430 H710 V392"/>
+  <text class="lbl" x="560" y="447">Poti → Lautstärke · Mute</text>
+
+  <!-- Strom -->
+  <rect x="30" y="585" width="1040" height="44" rx="10" fill="#F9FAFB" stroke="#D1D5DB"/>
+  <text x="550" y="612" text-anchor="middle" font-size="13" fill="#374151"><tspan font-weight="700">Strom: </tspan>Netzteil 5 V → Reed-Relais (geschaltet vom Ein/Aus-Knopf des Originals) → ESP32-WROVER und Verstärker</text>
+
+  <!-- Legende -->
+  <g font-size="12.5" fill="#374151">
+    <line x1="60" y1="660" x2="100" y2="660" stroke="#1F6FD1" stroke-width="3"/><text x="108" y="664">Radio-Stream (WLAN)</text>
+    <line x1="290" y1="660" x2="330" y2="660" stroke="#8A3FD1" stroke-width="3"/><text x="338" y="664">Bluetooth-Audio vom Handy</text>
+    <line x1="560" y1="660" x2="600" y2="660" stroke="#1E8A5A" stroke-width="3"/><text x="608" y="664">gemeinsamer Ausgang</text>
+    <line x1="790" y1="660" x2="830" y2="660" stroke="#6B7280" stroke-width="2" stroke-dasharray="6 4"/><text x="838" y="664">Bedienung</text>
+  </g>
+</svg>
