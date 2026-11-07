@@ -5,16 +5,16 @@
  * ein Poti stellt die Lautstärke (0..254) ein.
  * Das ersetzt den ESP32-S3, der bisher cli.play/cli.vol per UART geschickt hat.
  *
- * Dazu (Branch firmware-ng-bt):
- * - Bluetooth-Taste: eingerastet = Bluetooth-Lautsprecher (btspeaker.c),
- *   eine Sendertaste schaltet zurück aufs Radio.
+ * Dazu (Branch firmware-ng-bt, v2):
+ * - Bluetooth-Lautsprecher (btspeaker.c) ist immer an. Spielt das Handy,
+ *   schaltet btSpeakerPoll() den Ton aufs Handy; eine Sendertaste trennt das
+ *   Handy und spielt wieder Radio.
  * - Mute-Poti (Schleifer des Ein/Aus-Knopfs): es zählt die Drehrichtung.
  *   Um MUTE_STEP aufgedreht -> Mute aus, um MUTE_STEP zugedreht -> Mute an.
  *
  * Konfiguration in der Hardware-Partition (gpio_space), z. B. in der .csv:
  *   P_KEY0 .. P_KEY5   GPIO des Tasters für Sender 0..5 (Taster gegen GND,
  *                      interner Pull-up). 255 = nicht benutzt.
- *   P_KEY_BT           GPIO der Bluetooth-Taste (gegen GND). 255 = nicht benutzt.
  *   P_VOL_POT          GPIO des Poti-Schleifers, nur ADC1 (32..39).
  *                      Poti-Enden an 3,3 V und GND. 255 = nicht benutzt.
  *   P_MUTE_POT         GPIO des Mute-Poti-Schleifers, nur ADC1 (32..39).
@@ -36,9 +36,6 @@
 #include "app_main.h"
 #include "webserver.h"
 #include "webclient.h"
-#include "esp_system.h"
-#include "eeprom.h"
-#include "interface.h"
 #include "audio_renderer.h"
 #include "btspeaker.h"
 #include "stationkeys.h"
@@ -52,8 +49,6 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 #define NB_KEYS        6
 #define LOOP_MS        10      // Abfrage-Takt
 #define KEY_STABLE     4       // so oft gleich gelesen = entprellt (40 ms)
-#define BT_STABLE      20      // Bluetooth-Taste: 200 ms stabil
-#define BT_RESUME      30      // Bluetooth-Taste los ohne Sendertaste: nach 300 ms Radio
 #define POT_EVERY      8       // Poti alle 8 Takte (80 ms) auswerten
 #define POT_SAMPLES    16      // Mittelwert über 16 Messungen
 #define ADC_LOW        80      // Totzone unten (ESP32-ADC misst unter ~0,1 V nichts)
@@ -64,8 +59,6 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 #define MUTE_STEP      205     // ca. 5 % von 4095
 
 static gpio_num_t keyPin[NB_KEYS];
-static gpio_num_t btPin = GPIO_NONE;
-static bool btAtBoot = false;   // Bluetooth-Taste beim Start eingerastet
 static gpio_num_t potPin = GPIO_NONE;
 static gpio_num_t mutePin = GPIO_NONE;
 static adc1_channel_t potChan, muteChan;
@@ -97,7 +90,7 @@ static void readConfig(void)
 	nvs_handle handle;
 	char key[8];
 	for (int i = 0; i < NB_KEYS; i++) keyPin[i] = GPIO_NONE;
-	btPin = potPin = mutePin = GPIO_NONE;
+	potPin = mutePin = GPIO_NONE;
 
 	if (open_partition(hardware, gpio_space, NVS_READONLY, &handle) != ESP_OK) return;
 	for (int i = 0; i < NB_KEYS; i++)
@@ -105,7 +98,6 @@ static void readConfig(void)
 		sprintf(key, "P_KEY%d", i);
 		keyPin[i] = readPin(handle, key);
 	}
-	btPin = readPin(handle, "P_KEY_BT");
 	potPin = readPin(handle, "P_VOL_POT");
 	mutePin = readPin(handle, "P_MUTE_POT");
 	close_partition(handle, hardware);
@@ -134,35 +126,10 @@ static void applyVolume(int vol)
 	wsVol(s);       // Weboberfläche aktualisieren
 }
 
-// Wechsel Radio <-> Bluetooth geht über einen Neustart: Nur so bekommt das
-// Radio den fest reservierten Bluetooth-Speicher (ca. 56 KB intern).
-// Beim Start entscheidet die Bluetooth-Taste über die Betriebsart.
-static void rebootToRadio(int station)
-{
-	if (station >= 0)
-	{
-		g_device->currentstation = station;
-		setCurrentStation(station);
-	}
-	g_device->autostart = 1;   // nach dem Neustart gleich spielen
-	saveDeviceSettings(g_device);
-	printf("stationkeys: Neustart in den Radio-Betrieb (Sender %d)\n", g_device->currentstation);
-	vTaskDelay(50 / portTICK_PERIOD_MS);
-	esp_restart();
-}
-
-static void rebootToBluetooth(void)
-{
-	clientSilentDisconnect();
-	printf("stationkeys: Neustart in den Bluetooth-Betrieb\n");
-	vTaskDelay(50 / portTICK_PERIOD_MS);
-	esp_restart();
-}
-
 static void playKey(int n)
 {
 	char s[4];
-	if (btSpeakerActive()) rebootToRadio(n);
+	if (btSpeakerActive()) btSpeakerToRadio();   // Handy trennen, zurück zum Radio
 	sprintf(s, "%d", n);
 	printf("stationkeys: Taste %d -> Sender %d\n", n, n);
 	playStation(s); // wie cli.play("n"), merkt sich den Sender
@@ -197,11 +164,6 @@ static void task_stationkeys(void *pvParams)
 	// Bei Rasttasten spielt KaRadio beim Start den gespeicherten Sender.
 	bool pressed[NB_KEYS], lastRead[NB_KEYS];
 	for (int i = 0; i < NB_KEYS; i++) { pressed[i] = true; lastRead[i] = true; }
-	// Die Bluetooth-Taste wirkt dagegen nach ihrem Zustand: eingerastet beim
-	// Einschalten = gleich Bluetooth-Betrieb.
-	bool btDown = btAtBoot, btLast = btAtBoot;
-	uint8_t btSame = BT_STABLE;
-	int resume = 0;            // > 0: Bluetooth-Taste los, warten auf Sendertaste
 	int lastVol = -1;
 	int muteRef = -1;          // Bezugswert für die Drehrichtung
 	bool muted = false;
@@ -210,7 +172,6 @@ static void task_stationkeys(void *pvParams)
 	while (1)
 	{
 		// --- Sendertasten ---
-		bool stationPressed = false;
 		for (int i = 0; i < NB_KEYS; i++)
 		{
 			if (keyPin[i] == GPIO_NONE) continue;
@@ -220,33 +181,12 @@ static void task_stationkeys(void *pvParams)
 			if ((same[i] >= KEY_STABLE) && (down != pressed[i]))
 			{
 				pressed[i] = down;
-				if (down) { playKey(i); stationPressed = true; }
+				if (down) playKey(i);
 			}
 		}
-		if (stationPressed) resume = 0;
 
-		// --- Bluetooth-Taste ---
-		if (btPin != GPIO_NONE)
-		{
-			bool down = (gpio_get_level(btPin) == 0);
-			if (down == btLast) { if (btSame < BT_STABLE) btSame++; }
-			else { btSame = 0; btLast = down; }
-			if ((btSame >= BT_STABLE) && (down != btDown))
-			{
-				btDown = down;
-				if (down)
-				{
-					resume = 0;
-					if (btSpeakerAvailable()) btSpeakerStart();
-					else rebootToBluetooth();
-				}
-				else if (btSpeakerActive()) resume = BT_RESUME;
-			}
-			// Bluetooth-Taste ist herausgesprungen, aber keine Sendertaste kam:
-			// zurück zum zuletzt gespielten Sender.
-			if ((resume > 0) && (--resume == 0) && btSpeakerActive())
-				rebootToRadio(-1);
-		}
+		// --- Bluetooth: Umschaltung Radio <-> Handy ---
+		btSpeakerPoll();
 
 		// --- Lautstärke-Poti ---
 		if ((potPin != GPIO_NONE) && (tick % POT_EVERY == 0))
@@ -303,7 +243,6 @@ static bool configKey(gpio_num_t pin)
 
 void stationKeysStart(void)
 {
-	bool any = false;
 	readConfig();
 
 	for (int i = 0; i < NB_KEYS; i++)
@@ -311,37 +250,9 @@ void stationKeysStart(void)
 		if (keyPin[i] == GPIO_NONE) continue;
 		if (!configKey(keyPin[i])) { keyPin[i] = GPIO_NONE; continue; }
 		printf("stationkeys: Taste %d an GPIO %d\n", i, keyPin[i]);
-		any = true;
 	}
 
-	if (btPin != GPIO_NONE)
-	{
-		if (configKey(btPin))
-		{
-			// Zustand beim Start: 10 x im Abstand von 5 ms gedrückt = eingerastet
-			vTaskDelay(20 / portTICK_PERIOD_MS);
-			int low = 0;
-			for (int i = 0; i < 10; i++)
-			{
-				if (gpio_get_level(btPin) == 0) low++;
-				vTaskDelay(5 / portTICK_PERIOD_MS);
-			}
-			btAtBoot = (low == 10);
-			printf("stationkeys: Bluetooth-Taste an GPIO %d (%s)\n", btPin, btAtBoot ? "eingerastet" : "frei");
-			any = true;
-		}
-		else btPin = GPIO_NONE;
-	}
-	// Betriebsart beim Start: Bluetooth nur, wenn die Taste eingerastet ist.
-	// Sonst bekommt das Radio den reservierten Bluetooth-Speicher.
-	if (btAtBoot) btSpeakerStart();
-	else btSpeakerReleaseMemory();
-
-	if (potPin != GPIO_NONE)
-	{
-		if (configAdc(potPin, &potChan, "Poti")) any = true;
-		else potPin = GPIO_NONE;
-	}
+	if ((potPin != GPIO_NONE) && !configAdc(potPin, &potChan, "Poti")) potPin = GPIO_NONE;
 
 	if (mutePin != GPIO_NONE)
 	{
@@ -350,11 +261,13 @@ void stationKeysStart(void)
 			// Pull-up, damit ein fehlendes Poti nichts auslöst (nach der
 			// ADC-Einrichtung, die die Pulls abschaltet). GPIO 34..39 haben keinen.
 			if (mutePin < 34) rtc_gpio_pullup_en(mutePin);
-			any = true;
 		}
 		else mutePin = GPIO_NONE;
 	}
 
-	if (!any) return; // nichts konfiguriert
+	// Bluetooth immer an (sichtbar als "Biennophone")
+	btSpeakerInit();
+
+	// Der Task läuft immer: er bedient auch die Bluetooth-Umschaltung.
 	xTaskCreatePinnedToCore(task_stationkeys, "task_stationkeys", 4096, NULL, PRIO_ADDON, NULL, CPU_ADDON);
 }

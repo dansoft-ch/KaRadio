@@ -1,19 +1,26 @@
 /*
  * btspeaker.c - Bluetooth-Lautsprecher (A2DP-Sink) für KaRadio32 (dansoft-ch/KaRadio)
  *
- * Das Handy verbindet sich mit "Biennophone" und spielt Musik über den
- * I2S-Ausgang von KaRadio (render_samples). Lautstärke und Mute laufen damit
- * über denselben Weg wie beim Radio.
+ * v2: Bluetooth ist immer an und als "Biennophone" sichtbar, auch während das
+ * Radio spielt. Startet das Handy die Wiedergabe, stoppt das Radio und der Ton
+ * vom Handy kommt über den I2S-Ausgang von KaRadio (render_samples, damit
+ * wirken Lautstärke und Mute). Trennt sich das Handy oder pausiert es länger
+ * als BT_PAUSE_MS, spielt wieder der letzte Radiosender.
  *
- * Der Bluetooth-Stack wird beim ersten btSpeakerStart() eingeschaltet und bleibt
- * danach geladen. btSpeakerStop() trennt das Handy und macht das Gerät
- * unsichtbar; so muss der Stack nicht wiederholt ab- und aufgebaut werden.
+ * Die Umschaltung läuft in btSpeakerPoll() (aus dem stationkeys-Task), nicht in
+ * den Bluetooth-Callbacks.
+ *
+ * I2S: KaRadio installiert den I2S-Treiber nur, solange ein Radio-Decoder läuft,
+ * und baut ihn beim Stoppen wieder ab. Für Bluetooth richten wir ihn selbst ein
+ * und bauen ihn vor dem Radio-Start wieder ab (sonst startet der Decoder neu).
+ *
  * Grundlage: ESP-IDF 3.3 Beispiel examples/bluetooth/a2dp_sink.
  */
 #include <stdio.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
@@ -22,42 +29,37 @@
 #include "esp_bt_device.h"
 #include "esp_gap_bt_api.h"
 #include "esp_a2dp_api.h"
+#include "driver/i2s.h"
 #include "app_main.h"
 #include "webclient.h"
+#include "audio_player.h"
 #include "audio_renderer.h"
 #include "btspeaker.h"
 
 #define TAG "btspeaker"
+#define BT_PAUSE_MS     15000   // so lange Pause, dann zurück zum Radio
+#define DECODER_WAIT_MS 3000    // max. Wartezeit, bis der Radio-Decoder gestoppt ist
 
-static volatile bool s_active = false;   // Bluetooth-Betrieb gewählt (Taste 6)
-static bool s_stackUp = false;           // Stack einmal erfolgreich gestartet
-static bool s_connected = false;
+extern player_t* player_config;  // aus app_main
+extern void playStation(char* id);
+
+static bool s_stackUp = false;
+static volatile bool s_active = false;      // Bluetooth-Ton läuft, Radio gesperrt
+static volatile bool s_connected = false;
+static volatile bool s_wantBt = false;      // Handy spielt (A2DP gestartet)
+static volatile TickType_t s_pauseSince = 0; // Zeitpunkt der Pause, 0 = keine
+static volatile bool s_i2sReady = false;    // unser I2S-Treiber ist installiert
+static SemaphoreHandle_t s_i2sMux = NULL;   // schützt i2s_write gegen Abbau
 static esp_bd_addr_t s_peer;
 static volatile uint32_t s_rate = 44100;
-static volatile bool s_i2sReady = false; // I2S-Treiber installiert (sonst Absturz in i2s_write)
-static uint8_t *s_buf = NULL;            // Kopie der Daten, render_samples ändert sie (Lautstärke)
+static uint8_t *s_buf = NULL;               // Kopie der Daten, render_samples ändert sie
 static uint32_t s_bufLen = 0;
 
-static bool s_memReleased = false;      // BT-Speicher ans Radio abgegeben
-
 bool btSpeakerActive(void) { return s_active; }
-bool btSpeakerAvailable(void) { return !s_memReleased; }
 
-// Gibt den fest reservierten Bluetooth-Speicher (ca. 56 KB intern) frei.
-// Danach geht Bluetooth erst nach einem Neustart wieder.
-void btSpeakerReleaseMemory(void)
+static uint32_t freeInternal(void)
 {
-	if (s_memReleased || s_stackUp) return;
-	if (esp_bt_controller_mem_release(ESP_BT_MODE_BTDM) == ESP_OK) {
-		s_memReleased = true;
-		printf("btspeaker: Radio-Betrieb, Bluetooth-Speicher freigegeben (intern frei %u)\n",
-			heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-	}
-}
-
-static void setVisible(bool on)
-{
-	esp_bt_gap_set_scan_mode(on ? ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE : ESP_BT_SCAN_MODE_NONE);
+	return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
 static void gapCb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
@@ -85,20 +87,23 @@ static void a2dCb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 			s_connected = true;
 			memcpy(s_peer, param->conn_stat.remote_bda, sizeof(esp_bd_addr_t));
 			printf("btspeaker: Handy verbunden\n");
-			// verbunden: nicht mehr für andere sichtbar
 			esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE);
 		} else if (param->conn_stat.state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
 			s_connected = false;
+			s_wantBt = false;
 			printf("btspeaker: Handy getrennt\n");
-			setVisible(s_active);
+			esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
 		}
 		break;
 	case ESP_A2D_AUDIO_STATE_EVT:
 		if (param->audio_stat.state == ESP_A2D_AUDIO_STATE_STARTED) {
-			printf("btspeaker: Wiedergabe startet (%u Hz)\n", s_rate);
-			if (s_active) renderer_start();
+			printf("btspeaker: Handy spielt (%u Hz)\n", s_rate);
+			s_pauseSince = 0;
+			s_wantBt = true;
 		} else {
-			if (s_active) renderer_zero_dma_buffer();
+			printf("btspeaker: Handy pausiert\n");
+			s_pauseSince = xTaskGetTickCount();
+			if (s_pauseSince == 0) s_pauseSince = 1;
 		}
 		break;
 	case ESP_A2D_AUDIO_CFG_EVT:
@@ -119,26 +124,38 @@ static void a2dCb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 static void a2dDataCb(const uint8_t *data, uint32_t len)
 {
 	if (!s_active || !s_i2sReady || len == 0) return;
-	renderer_start();   // falls KaRadio den Renderer gestoppt hat (z. B. Autostart beim Start)
-	if (len > s_bufLen) {
-		free(s_buf);
-		s_buf = heap_caps_malloc(len, MALLOC_CAP_8BIT);
-		s_bufLen = s_buf ? len : 0;
-		if (!s_buf) return;
+	if (xSemaphoreTake(s_i2sMux, 0) != pdTRUE) return;   // gerade Umschaltung
+	if (s_i2sReady) {
+		if (len > s_bufLen) {
+			free(s_buf);
+			s_buf = heap_caps_malloc(len, MALLOC_CAP_8BIT);
+			s_bufLen = s_buf ? len : 0;
+		}
+		if (s_buf) {
+			memcpy(s_buf, data, len);
+			pcm_format_t fmt = {
+				.sample_rate = s_rate,
+				.bit_depth = I2S_BITS_PER_SAMPLE_16BIT,
+				.num_channels = 2,
+				.buffer_format = PCM_INTERLEAVED,
+			};
+			renderer_start();   // falls KaRadio den Renderer gestoppt hat
+			render_samples((char*)s_buf, len, &fmt);
+		}
 	}
-	memcpy(s_buf, data, len);
-	pcm_format_t fmt = {
-		.sample_rate = s_rate,
-		.bit_depth = I2S_BITS_PER_SAMPLE_16BIT,
-		.num_channels = 2,
-		.buffer_format = PCM_INTERLEAVED,
-	};
-	render_samples((char*)s_buf, len, &fmt);
+	xSemaphoreGive(s_i2sMux);
 }
 
-static bool stackStart(void)
+void btSpeakerInit(void)
 {
 	esp_err_t err;
+	if (s_stackUp) return;
+	if ((renderer_get() == NULL) || (get_audio_output_mode() == VS1053)) {
+		printf("btspeaker: nur mit I2S-Ausgang (kein VS1053) moeglich\n");
+		return;
+	}
+	s_i2sMux = xSemaphoreCreateMutex();
+	uint32_t before = freeInternal();
 	esp_bt_controller_mem_release(ESP_BT_MODE_BLE);   // nur klassisches Bluetooth
 
 	esp_bt_controller_config_t cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
@@ -158,55 +175,73 @@ static bool stackStart(void)
 	esp_a2d_register_callback(a2dCb);
 	esp_a2d_sink_register_data_callback(a2dDataCb);
 	if ((err = esp_a2d_sink_init()) != ESP_OK) goto fail;
-	return true;
+
+	esp_bt_gap_set_scan_mode(ESP_BT_SCAN_MODE_CONNECTABLE_DISCOVERABLE);
+	s_stackUp = true;
+	printf("btspeaker: sichtbar als \"%s\" (intern frei %u, Stack braucht %d)\n",
+		BT_DEVICE_NAME, freeInternal(), (int)before - (int)freeInternal());
+	return;
 
 fail:
 	printf("btspeaker: Start fehlgeschlagen: %s\n", esp_err_to_name(err));
-	return false;
 }
 
-void btSpeakerStart(void)
+static void enterBt(void)
 {
-	if (s_active) return;
-	if (s_memReleased) {
-		printf("btspeaker: Bluetooth erst nach Neustart moeglich\n");
-		return;
-	}
-	if ((renderer_get() == NULL) || (get_audio_output_mode() == VS1053)) {
-		printf("btspeaker: nur mit I2S-Ausgang (kein VS1053) moeglich\n");
-		return;
-	}
 	s_active = true;           // sperrt ab jetzt das Radio (clientConnect)
 	clientSilentDisconnect();  // Radio stoppen
-	printf("btspeaker: Bluetooth-Betrieb, freier Speicher %u (intern %u)\n",
-		esp_get_free_heap_size(), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-
-	if (!s_stackUp) {
-		if (!stackStart()) { s_active = false; return; }
-		s_stackUp = true;
-		printf("btspeaker: Stack gestartet, freier Speicher %u (intern %u)\n",
-			esp_get_free_heap_size(), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+	// warten, bis der Radio-Decoder seinen I2S-Treiber abgebaut hat
+	for (int t = 0; t < DECODER_WAIT_MS; t += 50) {
+		if (!player_config || player_config->decoder_status != RUNNING) break;
+		vTaskDelay(50 / portTICK_PERIOD_MS);
 	}
-	// KaRadio installiert den I2S-Treiber nur, solange ein Radio-Decoder läuft.
-	// Im Bluetooth-Betrieb läuft keiner, also hier selbst einrichten.
-	if (!s_i2sReady) {
-		if (init_i2s()) s_i2sReady = true;
-		else printf("btspeaker: I2S konnte nicht eingerichtet werden\n");
-	}
+	vTaskDelay(100 / portTICK_PERIOD_MS);
+	xSemaphoreTake(s_i2sMux, portMAX_DELAY);
+	if (init_i2s()) s_i2sReady = true;
+	else printf("btspeaker: I2S konnte nicht eingerichtet werden\n");
+	xSemaphoreGive(s_i2sMux);
 	renderer_start();
-	setVisible(true);
-	printf("btspeaker: sichtbar als \"%s\"\n", BT_DEVICE_NAME);
+	printf("btspeaker: Bluetooth-Ton an (intern frei %u)\n", freeInternal());
 }
 
-void btSpeakerStop(void)
+static void leaveBt(bool playRadio)
+{
+	xSemaphoreTake(s_i2sMux, portMAX_DELAY);
+	if (s_i2sReady) {
+		s_i2sReady = false;
+		renderer_zero_dma_buffer();
+		renderer_stop();
+		i2s_stop(I2S_NUM_0);
+		i2s_driver_uninstall(I2S_NUM_0);   // der Radio-Decoder installiert ihn neu
+	}
+	xSemaphoreGive(s_i2sMux);
+	s_active = false;
+	printf("btspeaker: zurueck zum Radio (intern frei %u)\n", freeInternal());
+	if (playRadio) {
+		char s[4] = "255";                  // 255 = aktueller Sender
+		playStation(s);
+	}
+}
+
+void btSpeakerPoll(void)
+{
+	if (!s_stackUp) return;
+	bool pausedLong = (s_pauseSince != 0) &&
+		((xTaskGetTickCount() - s_pauseSince) > (BT_PAUSE_MS / portTICK_PERIOD_MS));
+
+	if (!s_active && s_wantBt && s_pauseSince == 0) enterBt();
+	else if (s_active && (!s_connected || !s_wantBt || pausedLong)) {
+		s_wantBt = false;
+		s_pauseSince = 0;
+		leaveBt(true);
+	}
+}
+
+void btSpeakerToRadio(void)
 {
 	if (!s_active) return;
-	s_active = false;
-	if (s_stackUp) {
-		setVisible(false);
-		if (s_connected) esp_a2d_sink_disconnect(s_peer);
-	}
-	renderer_zero_dma_buffer();
-	renderer_stop();           // das Radio startet ihn beim Abspielen wieder
-	printf("btspeaker: Bluetooth aus, zurueck zum Radio\n");
+	s_wantBt = false;
+	s_pauseSince = 0;
+	if (s_connected) esp_a2d_sink_disconnect(s_peer);   // sonst holt das Handy den Ton zurück
+	leaveBt(false);   // Sender spielt der Aufrufer
 }

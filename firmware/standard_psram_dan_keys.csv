@@ -1,7 +1,7 @@
 key,type,encoding,value
 label_space,namespace,,
 L_LABEL,data,string,standard_psram_dan_keys.csv
-L_COMMENT,data,string,Wrover mit 5 Sendertasten + Bluetooth-Taste + Lautstaerke- und Mute-Poti.
+L_COMMENT,data,string,Wrover mit 6 Sendertasten + Lautstaerke- und Mute-Poti. Bluetooth immer an.
 gpio_space,namespace,,
 K_SPI,data,u8,2
 P_MISO,data,u8,19
@@ -44,8 +44,7 @@ P_KEY1,data,u8,14
 P_KEY2,data,u8,27
 P_KEY3,data,u8,15
 P_KEY4,data,u8,5
-P_KEY5,data,u8,255
-P_KEY_BT,data,u8,2
+P_KEY5,data,u8,2
 P_VOL_POT,data,u8,39
 P_MUTE_POT,data,u8,255
 option_space,namespace,,
