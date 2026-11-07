@@ -42,6 +42,26 @@ index 25e4149..11ae941 100644
  void renderer_init(renderer_config_t *config);
  void renderer_start();
  void renderer_stop();
+diff --git a/components/fdk-aac_decoder/fdk_aac_decoder.c b/components/fdk-aac_decoder/fdk_aac_decoder.c
+index 87d2dba..0111a28 100644
+--- a/components/fdk-aac_decoder/fdk_aac_decoder.c
++++ b/components/fdk-aac_decoder/fdk_aac_decoder.c
+@@ -53,13 +53,13 @@ void fdkaac_decoder_task(void *pvParameters)
+     //i2s_start(renderer_instance->i2s_num);
+ 
+     /* allocate sample buffer */
+-    buffer_t *pcm_buf = buf_create_dma(OUTPUT_BUFFER_SIZE);
++    buffer_t *pcm_buf = buf_create(OUTPUT_BUFFER_SIZE); // dansoft-ch: kein DMA noetig, darf in den PSRAM
+ 	if (pcm_buf==NULL) { ESP_LOGE(TAG,"malloc(pcm_buf) failed"); goto abort1; }
+     /* allocate bitstream buffer */
+ //    buffer_t *in_buf = buf_create(INPUT_BUFFER_SIZE*48);
+ 	buffer_t *in_buf  = NULL;
+ 	int bf = bigSram()?12:6;
+-    in_buf = buf_create_dma(INPUT_BUFFER_SIZE* bf );
++    in_buf = buf_create(INPUT_BUFFER_SIZE* bf ); // dansoft-ch: kein DMA noetig, darf in den PSRAM
+ 	if (in_buf==NULL) { 
+ 		ESP_LOGE(TAG,"buf_create in_buf failed"); 
+ 		buf_destroy( pcm_buf); 
 diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
 index 5052a47..08d6ecd 100644
 --- a/main/CMakeLists.txt
