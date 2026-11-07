@@ -85,7 +85,7 @@ Warum der Neustart: Bluetooth reserviert fest ca. 56 KB internen Speicher. Ohne 
 Weitere Eigenschaften von bt-v1:
 - Nur 5 Sendertasten (Taste 6 = Bluetooth).
 - WLAN bleibt im Bluetooth-Betrieb an (Weboberfläche erreichbar).
-- Mute über den Ein/Aus-Knopf (siehe unten) ist eingebaut, aber in der Konfiguration abgeschaltet (`P_MUTE_POT` = 255), bis Poti und Widerstand eingelötet sind.
+- Mute über den Ein/Aus-Knopf (siehe unten) ist eingebaut, im Tag bt-v1 aber abgeschaltet (`P_MUTE_POT` = 255).
 - Start-Wächter: Neustart, wenn KaRadio nicht innerhalb von 90 s „READY“ meldet.
 - WLAN: dasselbe Netz bis zu 3-mal versuchen, dann ein Neustart, erst danach AP-Modus „WifiKaRadio“.
 - WLAN- und Netzwerkpuffer liegen im PSRAM.
@@ -125,11 +125,11 @@ Gemessen am 07.11.2026 (freier interner Speicher, Test mit Handy):
 
 Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter** steuert ein Reed-Relais (hartes Ein/Aus, keine Firmware). Der **Schleifer des Potis** geht an **GPIO 36** (Eintrag `P_MUTE_POT`, Poti-Enden an 3,3 V und GND) und steuert **Mute**:
 
-- Knopf um ca. 5 % **aufdrehen** (Spannung steigt) → Mute aus.
-- Knopf um ca. 5 % **zudrehen** (Spannung sinkt) → Mute an.
+- Knopf um ca. 10 % **aufdrehen** (Spannung steigt) → Mute aus.
+- Knopf um ca. 10 % **zudrehen** (Spannung sinkt) → Mute an.
 - Es zählt die **Drehrichtung**, nicht die Stellung. Nach dem Einschalten ist Mute aus.
 - Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt.
-- GPIO 36 hat keinen eingebauten Pull-up: **100 kΩ von GPIO 36 nach 3,3 V** fest einlöten. Ohne Widerstand schwebt der Pin und löst von selbst Mute aus; deshalb ist es zurzeit abgeschaltet (`P_MUTE_POT` = 255). Nach dem Einlöten auf 36 setzen und die Konfiguration neu flashen.
+- GPIO 36 hat keinen eingebauten Pull-up: **100 kΩ von GPIO 36 nach 3,3 V** fest einlöten. Seit 07.11.2026 ist ein Poti angeschlossen und `P_MUTE_POT` = 36 (getestet). Mit angeschlossenem Poti braucht es den Widerstand nicht; er verhindert nur, dass ein offener Pin von selbst Mute auslöst.
 
 ## Wichtig beim Wechsel zwischen v1 und Bluetooth-Versionen
 
