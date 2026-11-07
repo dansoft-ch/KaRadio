@@ -56,7 +56,7 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 #define VOL_MAX        254
 #define VOL_HYST       2       // Mindeständerung, bevor neu gesetzt wird
 #define VOL_FORCE_MS   60000   // so lange nach dem Start gewinnt das Poti immer
-#define MUTE_STEP      205     // ca. 5 % von 4095
+#define MUTE_STEP      410     // ca. 10 % von 4095 (5 % war zu empfindlich)
 
 static gpio_num_t keyPin[NB_KEYS];
 static gpio_num_t potPin = GPIO_NONE;
