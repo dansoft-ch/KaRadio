@@ -34,6 +34,7 @@ static bool s_stackUp = false;           // Stack einmal erfolgreich gestartet
 static bool s_connected = false;
 static esp_bd_addr_t s_peer;
 static volatile uint32_t s_rate = 44100;
+static volatile bool s_i2sReady = false; // I2S-Treiber installiert (sonst Absturz in i2s_write)
 static uint8_t *s_buf = NULL;            // Kopie der Daten, render_samples ändert sie (Lautstärke)
 static uint32_t s_bufLen = 0;
 
@@ -117,7 +118,8 @@ static void a2dCb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 // Läuft im A2DP-Task: PCM 16 Bit, Stereo, verschachtelt.
 static void a2dDataCb(const uint8_t *data, uint32_t len)
 {
-	if (!s_active || len == 0) return;
+	if (!s_active || !s_i2sReady || len == 0) return;
+	renderer_start();   // falls KaRadio den Renderer gestoppt hat (z. B. Autostart beim Start)
 	if (len > s_bufLen) {
 		free(s_buf);
 		s_buf = heap_caps_malloc(len, MALLOC_CAP_8BIT);
@@ -184,6 +186,12 @@ void btSpeakerStart(void)
 		s_stackUp = true;
 		printf("btspeaker: Stack gestartet, freier Speicher %u (intern %u)\n",
 			esp_get_free_heap_size(), heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+	}
+	// KaRadio installiert den I2S-Treiber nur, solange ein Radio-Decoder läuft.
+	// Im Bluetooth-Betrieb läuft keiner, also hier selbst einrichten.
+	if (!s_i2sReady) {
+		if (init_i2s()) s_i2sReady = true;
+		else printf("btspeaker: I2S konnte nicht eingerichtet werden\n");
 	}
 	renderer_start();
 	setVisible(true);
