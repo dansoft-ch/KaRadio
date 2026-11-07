@@ -37,7 +37,22 @@ static volatile uint32_t s_rate = 44100;
 static uint8_t *s_buf = NULL;            // Kopie der Daten, render_samples ändert sie (Lautstärke)
 static uint32_t s_bufLen = 0;
 
+static bool s_memReleased = false;      // BT-Speicher ans Radio abgegeben
+
 bool btSpeakerActive(void) { return s_active; }
+bool btSpeakerAvailable(void) { return !s_memReleased; }
+
+// Gibt den fest reservierten Bluetooth-Speicher (ca. 56 KB intern) frei.
+// Danach geht Bluetooth erst nach einem Neustart wieder.
+void btSpeakerReleaseMemory(void)
+{
+	if (s_memReleased || s_stackUp) return;
+	if (esp_bt_controller_mem_release(ESP_BT_MODE_BTDM) == ESP_OK) {
+		s_memReleased = true;
+		printf("btspeaker: Radio-Betrieb, Bluetooth-Speicher freigegeben (intern frei %u)\n",
+			heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+	}
+}
 
 static void setVisible(bool on)
 {
@@ -151,6 +166,10 @@ fail:
 void btSpeakerStart(void)
 {
 	if (s_active) return;
+	if (s_memReleased) {
+		printf("btspeaker: Bluetooth erst nach Neustart moeglich\n");
+		return;
+	}
 	if ((renderer_get() == NULL) || (get_audio_output_mode() == VS1053)) {
 		printf("btspeaker: nur mit I2S-Ausgang (kein VS1053) moeglich\n");
 		return;

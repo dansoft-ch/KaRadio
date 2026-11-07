@@ -36,6 +36,9 @@
 #include "app_main.h"
 #include "webserver.h"
 #include "webclient.h"
+#include "esp_system.h"
+#include "eeprom.h"
+#include "interface.h"
 #include "audio_renderer.h"
 #include "btspeaker.h"
 #include "stationkeys.h"
@@ -62,6 +65,7 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 
 static gpio_num_t keyPin[NB_KEYS];
 static gpio_num_t btPin = GPIO_NONE;
+static bool btAtBoot = false;   // Bluetooth-Taste beim Start eingerastet
 static gpio_num_t potPin = GPIO_NONE;
 static gpio_num_t mutePin = GPIO_NONE;
 static adc1_channel_t potChan, muteChan;
@@ -130,11 +134,36 @@ static void applyVolume(int vol)
 	wsVol(s);       // Weboberfläche aktualisieren
 }
 
+// Wechsel Radio <-> Bluetooth geht über einen Neustart: Nur so bekommt das
+// Radio den fest reservierten Bluetooth-Speicher (ca. 56 KB intern).
+// Beim Start entscheidet die Bluetooth-Taste über die Betriebsart.
+static void rebootToRadio(int station)
+{
+	if (station >= 0)
+	{
+		g_device->currentstation = station;
+		setCurrentStation(station);
+	}
+	g_device->autostart = 1;   // nach dem Neustart gleich spielen
+	saveDeviceSettings(g_device);
+	printf("stationkeys: Neustart in den Radio-Betrieb (Sender %d)\n", g_device->currentstation);
+	vTaskDelay(50 / portTICK_PERIOD_MS);
+	esp_restart();
+}
+
+static void rebootToBluetooth(void)
+{
+	clientSilentDisconnect();
+	printf("stationkeys: Neustart in den Bluetooth-Betrieb\n");
+	vTaskDelay(50 / portTICK_PERIOD_MS);
+	esp_restart();
+}
+
 static void playKey(int n)
 {
 	char s[4];
+	if (btSpeakerActive()) rebootToRadio(n);
 	sprintf(s, "%d", n);
-	if (btSpeakerActive()) btSpeakerStop();
 	printf("stationkeys: Taste %d -> Sender %d\n", n, n);
 	playStation(s); // wie cli.play("n"), merkt sich den Sender
 }
@@ -170,8 +199,8 @@ static void task_stationkeys(void *pvParams)
 	for (int i = 0; i < NB_KEYS; i++) { pressed[i] = true; lastRead[i] = true; }
 	// Die Bluetooth-Taste wirkt dagegen nach ihrem Zustand: eingerastet beim
 	// Einschalten = gleich Bluetooth-Betrieb.
-	bool btDown = false, btLast = false;
-	uint8_t btSame = 0;
+	bool btDown = btAtBoot, btLast = btAtBoot;
+	uint8_t btSame = BT_STABLE;
 	int resume = 0;            // > 0: Bluetooth-Taste los, warten auf Sendertaste
 	int lastVol = -1;
 	int muteRef = -1;          // Bezugswert für die Drehrichtung
@@ -205,18 +234,18 @@ static void task_stationkeys(void *pvParams)
 			if ((btSame >= BT_STABLE) && (down != btDown))
 			{
 				btDown = down;
-				if (down) { resume = 0; btSpeakerStart(); }
+				if (down)
+				{
+					resume = 0;
+					if (btSpeakerAvailable()) btSpeakerStart();
+					else rebootToBluetooth();
+				}
 				else if (btSpeakerActive()) resume = BT_RESUME;
 			}
 			// Bluetooth-Taste ist herausgesprungen, aber keine Sendertaste kam:
 			// zurück zum zuletzt gespielten Sender.
 			if ((resume > 0) && (--resume == 0) && btSpeakerActive())
-			{
-				btSpeakerStop();
-				char s[4];
-				sprintf(s, "%d", 255);   // 255 = aktueller Sender
-				playStation(s);
-			}
+				rebootToRadio(-1);
 		}
 
 		// --- Lautstärke-Poti ---
@@ -289,11 +318,24 @@ void stationKeysStart(void)
 	{
 		if (configKey(btPin))
 		{
-			printf("stationkeys: Bluetooth-Taste an GPIO %d\n", btPin);
+			// Zustand beim Start: 10 x im Abstand von 5 ms gedrückt = eingerastet
+			vTaskDelay(20 / portTICK_PERIOD_MS);
+			int low = 0;
+			for (int i = 0; i < 10; i++)
+			{
+				if (gpio_get_level(btPin) == 0) low++;
+				vTaskDelay(5 / portTICK_PERIOD_MS);
+			}
+			btAtBoot = (low == 10);
+			printf("stationkeys: Bluetooth-Taste an GPIO %d (%s)\n", btPin, btAtBoot ? "eingerastet" : "frei");
 			any = true;
 		}
 		else btPin = GPIO_NONE;
 	}
+	// Betriebsart beim Start: Bluetooth nur, wenn die Taste eingerastet ist.
+	// Sonst bekommt das Radio den reservierten Bluetooth-Speicher.
+	if (btAtBoot) btSpeakerStart();
+	else btSpeakerReleaseMemory();
 
 	if (potPin != GPIO_NONE)
 	{

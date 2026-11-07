@@ -55,19 +55,73 @@ index 5052a47..08d6ecd 100644
  	"addonu8g2.c"
  	"addonucg.c"
 diff --git a/main/app_main3.h b/main/app_main3.h
-index 1639154..d545d46 100644
+index 1639154..feaa36e 100644
 --- a/main/app_main3.h
 +++ b/main/app_main3.h
-@@ -27,6 +27,8 @@ Copyright (C) 2017  KaraWin
+@@ -27,6 +27,9 @@ Copyright (C) 2017  KaraWin
  #include <string.h>
  #include <stdbool.h>
  #include <nvs.h>
 +#include "stationkeys.h"
 +#include "soc/rtc_wdt.h"
++#include "esp_attr.h"
  #include "freertos/FreeRTOS.h"
  #include "freertos/task.h"
  #include "freertos/event_groups.h"
-@@ -1145,12 +1147,15 @@ void app_main()
+@@ -476,6 +479,10 @@ static void unParse(char* str)
+ 
+ 
+ 
++// dansoft-ch: Neustart-Zaehler fuer WLAN-Fehlstarts, uebersteht esp_restart()
++RTC_NOINIT_ATTR static uint32_t wifiRebootMagic;
++RTC_NOINIT_ATTR static uint32_t wifiReboots;
++
+ static void start_wifi()
+ {
+     ESP_LOGI(TAG, "starting wifi");
+@@ -592,8 +599,32 @@ static void start_wifi()
+ 		if ( (xEventGroupWaitBits(wifi_event_group, CONNECTED_AP,false, true, 1500) & CONNECTED_AP) ==0) 
+ 		//timeout . Try the next AP
+ 		{
++			// dansoft-ch: Der erste Versuch scheitert beim Kaltstart oft
++			// (auth -> init). Dasselbe WLAN bis zu 3x versuchen.
++			static int wifiTries = 0;
++			if ((g_device->current_ap != APMODE) && (++wifiTries < 3))
++			{
++				printf("WIFI: neuer Versuch %d\n", wifiTries + 1);
++				continue;
++			}
++			wifiTries = 0;
+ 			g_device->current_ap++;
+ 			g_device->current_ap %=3;
++			// dansoft-ch: Statt in den AP-Modus einmal neu starten, wenn ein WLAN
++			// eingerichtet ist. Erst wenn auch das scheitert: AP-Modus.
++			if ((g_device->current_ap == APMODE) && !getAutoWifi()
++				&& (strlen(g_device->ssid1) || strlen(g_device->ssid2)))
++			{
++				if (wifiRebootMagic != 0x57494649) { wifiRebootMagic = 0x57494649; wifiReboots = 0; }
++				if (wifiReboots < 1)
++				{
++					wifiReboots++;
++					printf("WIFI: kein WLAN, Neustart fuer einen neuen Versuch\n");
++					vTaskDelay(10);
++					esp_restart();
++				}
++				wifiReboots = 0;
++			}
+ 			if (getAutoWifi() && (g_device->current_ap == APMODE))
+ 			{
+ 				char inp = fgetc(stdin);
+@@ -603,7 +634,7 @@ static void start_wifi()
+ 			}
+ 			saveDeviceSettings(g_device);
+ 			ESP_LOGI(TAG,"device->current_ap: %d",g_device->current_ap);	
+-		}	else break;	// 					
++		}	else { wifiReboots = 0; break; } // dansoft-ch: verbunden	// 					
+ 	}					
+ }
+ 
+@@ -1145,12 +1176,15 @@ void app_main()
  	vTaskDelay(1);
  	xTaskCreatePinnedToCore (task_addon, "task_addon", 2200, NULL, PRIO_ADDON, &pxCreatedTask,CPU_ADDON);  
  	ESP_LOGI(TAG, "%s task: %x","task_addon",(unsigned int)pxCreatedTask);	

@@ -14,5 +14,10 @@ void btSpeakerStart(void);
 void btSpeakerStop(void);
 // true, solange der Bluetooth-Betrieb aktiv ist (Radio ist dann gesperrt).
 bool btSpeakerActive(void);
+// Radio-Betrieb ab Start: reservierten BT-Speicher (ca. 56 KB intern) ans Radio
+// abgeben. Bluetooth geht danach erst nach einem Neustart wieder.
+void btSpeakerReleaseMemory(void);
+// false, wenn der Speicher abgegeben wurde (Bluetooth braucht dann einen Neustart).
+bool btSpeakerAvailable(void);
 
 #endif
