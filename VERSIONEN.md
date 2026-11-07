@@ -10,7 +10,8 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 | `firmware-ng` | Branch | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig (`firmware/`) | funktioniert, getestet 06.11.2026 |
 | `firmware-ng-v1` | Tag + Release | fester Stand von `firmware-ng` mit fertigen `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern** |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
-| `firmware-ng-bt` | Branch | **v2**: Bluetooth **immer an**, automatische Umschaltung Radio ↔ Handy, 6 Sendertasten | funktioniert, getestet 07.11.2026 |
+| `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
+| `firmware-ng-bt` | Branch | Weiterentwicklung ab **v2**: Bluetooth **immer an**, automatische Umschaltung Radio ↔ Handy, 6 Sendertasten | funktioniert, getestet 07.11.2026 |
 
 Regel: In `firmware-ng` wird nichts mehr geändert, solange `firmware-ng-bt` in Arbeit ist. Neues kommt nur in `firmware-ng-bt`.
 
@@ -32,6 +33,10 @@ powershell -ExecutionPolicy Bypass -File .\firmware\flash.ps1 -Port COMx
 git switch firmware-ng-bt
 ```
 Achtung: Die Konfiguration im Tag hat Taste 6 = Bluetooth und das Mute-Poti aus.
+
+### `firmware-ng-bt-v2` (Bluetooth immer an)
+
+Genauso, nur mit `git switch --detach firmware-ng-bt-v2`. Konfiguration: 6 Sendertasten, Mute-Poti an GPIO 36.
 
 Sender, WLAN-Daten und Einstellungen bleiben bei beiden erhalten. Mehr Details: `firmware/README.md`.
 
