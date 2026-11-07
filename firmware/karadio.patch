@@ -1,11 +1,56 @@
+diff --git a/components/audio_renderer/audio_renderer.c b/components/audio_renderer/audio_renderer.c
+index 04dfa30..5bb37f4 100644
+--- a/components/audio_renderer/audio_renderer.c
++++ b/components/audio_renderer/audio_renderer.c
+@@ -9,6 +9,7 @@
+  */
+ 
+ #include <stdbool.h>
++#include <string.h>
+ #include <math.h>
+ #include "freertos/FreeRTOS.h"
+ #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+@@ -35,6 +36,10 @@
+ 
+ static renderer_config_t *renderer_instance = NULL;
+ static component_status_t renderer_status = UNINITIALIZED;
++static volatile bool renderer_mute = false; // dansoft-ch: Mute-Poti
++
++void renderer_set_mute(bool on) { renderer_mute = on; }
++bool renderer_get_mute() { return renderer_mute; }
+ //static QueueHandle_t i2s_event_queue;
+ 
+ static const uint32_t VUCP_PREAMBLE_B = 0xCCE80000; // 11001100 11101000
+@@ -449,6 +454,7 @@ void IRAM_ATTR render_samples(char *buf, uint32_t buf_len, pcm_format_t *buf_des
+ {
+     if(renderer_status != RUNNING)
+         return;
++	if (renderer_mute) memset(buf, 0, buf_len); // dansoft-ch: Mute
+ 
+ 	if(renderer_instance->output_mode == SPDIF)
+ 		render_spdif_samples(buf, buf_len, buf_desc);
+diff --git a/components/audio_renderer/include/audio_renderer.h b/components/audio_renderer/include/audio_renderer.h
+index 25e4149..11ae941 100644
+--- a/components/audio_renderer/include/audio_renderer.h
++++ b/components/audio_renderer/include/audio_renderer.h
+@@ -47,6 +47,8 @@ void render_samples(char *buf, uint32_t len, pcm_format_t *format);
+ void render_sample_block(short *sample_buff_ch0, short *sample_buff_ch1, int num_samples, unsigned int num_channels);
+ 
+ void renderer_volume(uint32_t volume);
++void renderer_set_mute(bool on);
++bool renderer_get_mute();
+ void renderer_init(renderer_config_t *config);
+ void renderer_start();
+ void renderer_stop();
 diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
-index 5052a47..370d9c4 100644
+index 5052a47..08d6ecd 100644
 --- a/main/CMakeLists.txt
 +++ b/main/CMakeLists.txt
-@@ -1,5 +1,6 @@
+@@ -1,5 +1,7 @@
  set(COMPONENT_SRCS 		
  	"addon.c"
 +	"stationkeys.c"
++	"btspeaker.c"
  	"addoncommon.c"
  	"addonu8g2.c"
  	"addonucg.c"
@@ -29,11 +74,105 @@ index 1639154..09bbc9c 100644
  
  	vTaskDelay(60);// wait tasks init
  	ESP_LOGI(TAG," Init Done");
+diff --git a/main/ota.c b/main/ota.c
+index ea6e448..1abf73d 100644
+--- a/main/ota.c
++++ b/main/ota.c
+@@ -206,6 +206,7 @@ static void ota_task(void *pvParameter)
+     }
+ 
+ 	update_partition = esp_ota_get_next_update_partition(NULL);
++	if (update_partition == NULL) { wsUpgrade("no OTA partition", 0,100); goto exit; } // dansoft-ch
+     ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%x",
+              update_partition->subtype, update_partition->address);
+     assert(update_partition != NULL);
+diff --git a/main/webclient.c b/main/webclient.c
+index 1a5a19e..73c7029 100644
+--- a/main/webclient.c
++++ b/main/webclient.c
+@@ -27,6 +27,7 @@
+ #include "audio_player.h"
+ #include "spiram_fifo.h"
+ #include "app_main.h"
++#include "btspeaker.h"
+ 
+ extern player_t* player_config;
+ #define min(a, b) (((a) < (b)) ? (a) : (b))
+@@ -907,6 +908,7 @@ void clientSetPort(uint16_t port)
+ 
+ void clientConnect()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	once = 0;
+ 	if((serverInfo = (struct hostent*)gethostbyname(cleanURL()))) {
+@@ -921,6 +923,7 @@ void clientConnect()
+ }
+ void clientConnectOnce()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	if((serverInfo = (struct hostent*)gethostbyname(cleanURL()))) {
+ 		xSemaphoreGive(sConnect);
+@@ -932,6 +935,7 @@ void clientConnectOnce()
+ }
+ void clientSilentConnect()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	once = 0;
+ 	if(serverInfo != NULL) {
+diff --git a/partitions.csv b/partitions.csv
+index af1c795..790ac1c 100644
+--- a/partitions.csv
++++ b/partitions.csv
+@@ -4,8 +4,8 @@ nvs,      data, nvs,     0x9000,  0x4000
+ otadata,  data, ota,     0xd000,  0x2000
+ phy_init, data, phy,     0xf000,  0x1000
+ # factory,  0,    0,       0x10000,  0x120000
+-ota_0,    0,    ota_0,   0x10000 ,  0x1C0000
+-ota_1,    0,    ota_1,   0x1D0000,  0x1C0000
++ota_0,    0,    ota_0,   0x10000 ,  0x380000
++# ota_1 entfernt (dansoft-ch): Bluetooth braucht Platz, device/stations/hardware bleiben an derselben Adresse
+ # the configuration partition
+ device,	  0x40,      ,   ,         0x1000
+ # the stations partition
 diff --git a/sdkconfig b/sdkconfig
-index 8441d22..7f78ec2 100644
+index 8441d22..3d4bb9d 100644
 --- a/sdkconfig
 +++ b/sdkconfig
-@@ -298,9 +298,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
+@@ -163,7 +163,20 @@ CONFIG_AWS_IOT_SDK=
+ #
+ # Bluetooth
+ #
+-CONFIG_BT_ENABLED=
++CONFIG_BT_ENABLED=y
++CONFIG_BTDM_CONTROLLER_MODE_BLE_ONLY=
++CONFIG_BTDM_CONTROLLER_MODE_BR_EDR_ONLY=y
++CONFIG_BTDM_CONTROLLER_MODE_BTDM=
++CONFIG_BLUEDROID_ENABLED=y
++CONFIG_CLASSIC_BT_ENABLED=y
++CONFIG_A2DP_ENABLE=y
++CONFIG_BT_SPP_ENABLED=
++CONFIG_HFP_ENABLE=
++CONFIG_GATTS_ENABLE=
++CONFIG_GATTC_ENABLE=
++CONFIG_BLE_SMP_ENABLE=
++CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST=y
++CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY=y
+ CONFIG_BTDM_CTRL_BR_EDR_SCO_DATA_PATH_EFF=0
+ CONFIG_BTDM_CTRL_AUTO_LATENCY_EFF=
+ CONFIG_BTDM_CTRL_LEGACY_AUTH_VENDOR_EVT_EFF=
+@@ -171,7 +184,7 @@ CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_ACL_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_SYNC_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE=0
+-CONFIG_BT_RESERVE_DRAM=0
++CONFIG_BT_RESERVE_DRAM=0xdb5c
+ CONFIG_BLE_MESH=
+ 
+ #
+@@ -298,9 +311,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
  CONFIG_ULP_COPROC_ENABLED=
  CONFIG_ULP_COPROC_RESERVE_MEM=0
  CONFIG_ESP32_PANIC_PRINT_HALT=

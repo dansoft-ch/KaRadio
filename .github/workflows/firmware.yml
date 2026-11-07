@@ -45,8 +45,8 @@ jobs:
           git fetch -q --depth 1 "$KARADIO_REPO" "$KARADIO_COMMIT"
           git checkout -q FETCH_HEAD
           git apply --verbose ../firmware/karadio.patch
-          cp ../firmware/stationkeys.c main/
-          cp ../firmware/stationkeys.h main/include/
+          cp ../firmware/stationkeys.c ../firmware/btspeaker.c main/
+          cp ../firmware/stationkeys.h ../firmware/btspeaker.h main/include/
           # sdkconfig muss neuer sein als sdkconfig.defaults, sonst überschreibt das Makefile sie
           touch sdkconfig
 

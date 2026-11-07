@@ -74,4 +74,13 @@ Die Tasten des Radios sind **Rasttasten** (eine bleibt eingerastet, ein Druck au
 - Es gibt nur noch 5 Sendertasten.
 - WLAN bleibt im Bluetooth-Betrieb vorerst an (Weboberfläche erreichbar). Gibt es Aussetzer im Bluetooth-Ton, wird es dort abgeschaltet.
 - Bluetooth läuft nur, solange Taste 6 eingerastet ist, damit es nicht gleichzeitig mit dem Radio-Streaming um Speicher und Antenne konkurriert.
+### Mute über den Ein/Aus-Knopf
+
+Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter** steuert ein Reed-Relais (hartes Ein/Aus, keine Firmware). Der **Schleifer des Potis** geht an **GPIO 36** (Eintrag `P_MUTE_POT`, Poti-Enden an 3,3 V und GND) und steuert **Mute**:
+
+- Knopf um ca. 5 % **aufdrehen** (Spannung steigt) → Mute aus.
+- Knopf um ca. 5 % **zudrehen** (Spannung sinkt) → Mute an.
+- Es zählt die **Drehrichtung**, nicht die Stellung. Nach dem Einschalten ist Mute aus.
+- Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt.
+
 - Eingerastete Tasten beim Einschalten sind unkritisch: GPIO 2, 5 und 15 stören nur beim Flashen bzw. unterdrücken die Startmeldungen. Zum Flashen sicherheitshalber Taste 1 (GPIO 13) einrasten.
