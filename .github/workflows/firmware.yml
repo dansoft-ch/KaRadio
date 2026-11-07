@@ -1,13 +1,20 @@
 # Baut KaRadio32 mit unserer Ergänzung (Sendertasten + Lautstärke-Poti, firmware/).
 # Ergebnis: Artefakt "karadio32-firmware" mit allen .bin-Dateien zum Flashen.
+# Bei einem Tag "firmware-ng-v*" zusätzlich ein GitHub-Release mit denselben Dateien
+# (Artefakte werden nach 90 Tagen gelöscht, Releases bleiben).
 name: Firmware
 
 on:
   push:
+    branches: ["**"]
     paths:
       - "firmware/**"
       - ".github/workflows/firmware.yml"
+    tags: ["firmware-ng-v*"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 env:
   KARADIO_REPO: https://github.com/karawin/Ka-Radio32
@@ -82,3 +89,15 @@ jobs:
         with:
           name: karadio32-firmware
           path: out/
+
+      - name: Release anlegen (nur bei Tag)
+        if: startsWith(github.ref, 'refs/tags/firmware-ng-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            KaRadio32 Firmware NG (Sendertasten + Lautstärke-Poti), Stand ${{ github.ref_name }}.
+            Flashen: alle Dateien in einen Ordner legen, dann
+            `powershell -ExecutionPolicy Bypass -File .\flash.ps1 -Port COMx`
+            Details: VERSIONEN.md und firmware/README.md im Repo.
+          files: out/*
