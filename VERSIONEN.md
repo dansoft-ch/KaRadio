@@ -68,6 +68,7 @@ Die Tasten des Radios sind **Rasttasten** (eine bleibt eingerastet, ein Druck au
 | Taste 6 (GPIO 2) rastet ein | Radio stoppt, Bluetooth geht an, Handy findet das Radio als **„Biennophone“** |
 | Taste 1–5 rastet ein (Taste 6 springt heraus) | Bluetooth aus, Radio spielt den gewählten Sender |
 | Einschalten mit eingerasteter Taste 6 | startet direkt als Bluetooth-Lautsprecher (kein Radio-Stream) |
+| Wechsel Radio ↔ Bluetooth im Betrieb | automatischer Neustart (ca. 15–20 s), weil das Radio sonst zu wenig Speicher hat |
 | Einschalten mit Taste 1–5 | Radio wie bisher |
 | Poti | Lautstärke in beiden Betriebsarten |
 
