@@ -46,7 +46,7 @@ P_KEY3,data,u8,15
 P_KEY4,data,u8,5
 P_KEY5,data,u8,2
 P_VOL_POT,data,u8,39
-P_MUTE_POT,data,u8,255
+P_MUTE_POT,data,u8,36
 option_space,namespace,,
 O_LCD_TYPE,data,u8,255
 O_LCD_ROTA,data,u8,255
