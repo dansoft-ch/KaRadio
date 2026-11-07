@@ -66,11 +66,17 @@ jobs:
           grep -q "return ESP_SPIRAM_SIZE_INVALID;" esp-idf/components/esp32/spiram.c
 
       - name: Bauen
+        shell: bash
         run: |
           export IDF_PATH="$HOME/esp/esp-idf"
           export PATH="$HOME/esp/xtensa-esp32-elf/bin:$PATH"
           cd karadio
-          make -j"$(nproc)" all BATCH_BUILD=1
+          # Fehlerzeilen als Annotation ausgeben (ohne Anmeldung sichtbar)
+          set -o pipefail
+          if ! make -j"$(nproc)" all BATCH_BUILD=1 2>&1 | tee build.log; then
+            grep -E "error|Error|undefined reference|overflow" build.log | head -15 | sed 's/^/::error::/'
+            exit 1
+          fi
 
       - name: Hardware-Konfiguration erzeugen
         run: |
