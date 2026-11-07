@@ -74,7 +74,7 @@ jobs:
           # Fehlerzeilen als Annotation ausgeben (ohne Anmeldung sichtbar)
           set -o pipefail
           if ! make -j"$(nproc)" all BATCH_BUILD=1 2>&1 | tee build.log; then
-            grep -E "error|Error|undefined reference|overflow" build.log | head -15 | sed 's/^/::error::/'
+            grep -E "error:|undefined reference|overflowed|\*\*\*" build.log | grep -v "^xtensa-esp32-elf" | cut -c1-400 | head -15 | sed 's/^/::error::/'
             exit 1
           fi
 
