@@ -19,8 +19,7 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 | `P_KEY2` | 27 | Taste 3 (Sender 2) gegen GND |
 | `P_KEY3` | 15 | Taste 4 (Sender 3) gegen GND |
 | `P_KEY4` | 5  | Taste 5 (Sender 4) gegen GND |
-| `P_KEY5` | 2 → im Branch `firmware-ng-bt`: 255 | Taste 6 (Sender 5) gegen GND |
-| `P_KEY_BT` | 2 (nur `firmware-ng-bt`) | Taste 6 = Bluetooth (Rasttaste) gegen GND |
+| `P_KEY5` | 2  | Taste 6 (Sender 5) gegen GND (in `firmware-ng-bt-v1`: 255, dafür `P_KEY_BT` = 2) |
 | `P_VOL_POT` | 39 (VN / SVN) | Poti-Schleifer; Poti-Enden an 3,3 V und GND |
 | `P_MUTE_POT` | 36 (VP / SVP, nur `firmware-ng-bt`) | Schleifer des Ein/Aus-Knopf-Potis; Enden an 3,3 V und GND; 100 kΩ nach 3,3 V |
 
@@ -31,9 +30,10 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 
 ## Bluetooth-Lautsprecher und Mute (Branch `firmware-ng-bt`)
 
-- `btspeaker.c` / `.h`: Das Radio ist per Bluetooth als **„Biennophone“** sichtbar (A2DP-Sink, Koppeln ohne PIN). Der Ton geht wie beim Radio über I2S an den MAX98357A. Lautstärke-Poti und Mute wirken auch hier. Nur mit I2S-Ausgang, nicht mit VS1053.
-- **Bluetooth-Taste** (`P_KEY_BT`, GPIO 2, früher Taste 6 / `P_KEY5`): Rasttaste. Beim Einschalten entscheidet sie die Betriebsart: eingerastet = Bluetooth, frei = Radio. Im Radio-Betrieb gibt die Firmware den fest reservierten Bluetooth-Speicher (ca. 56 KB intern) ans Radio ab; ohne diesen Speicher bricht der Radio-Stream ab und das Webinterface hängt. **Ein Wechsel Radio ↔ Bluetooth startet den WROVER deshalb neu** (ca. 15–20 s bis Ton). Eine Sendertaste im Bluetooth-Betrieb speichert den Sender, schaltet Autostart ein und startet neu ins Radio.
-- **Speicher**: WLAN- und Netzwerkpuffer liegen zuerst im PSRAM (4 MB), kleine Speicherblöcke ab 4 KB ebenfalls. Gemessen beim Radio-Streaming: rund 66 KB interner Speicher frei, stabil.
+- `btspeaker.c` / `.h` (v2): Bluetooth ist **immer an** und als **„Biennophone“** sichtbar (A2DP-Sink, Koppeln ohne PIN), auch während das Radio spielt. Startet das Handy die Wiedergabe, stoppt das Radio und nach ca. 1 s kommt der Handy-Ton über I2S an den MAX98357A. Pause länger als 15 s oder Handy getrennt → der letzte Sender spielt wieder. Eine Sendertaste trennt das Handy und spielt den Sender. Lautstärke-Poti und Mute wirken auch hier. Nur mit I2S-Ausgang, nicht mit VS1053.
+  - I2S: KaRadio installiert den I2S-Treiber nur, solange ein Radio-Decoder läuft. `btspeaker.c` richtet ihn für Bluetooth selbst ein (nachdem der Decoder gestoppt ist) und baut ihn vor dem Radio-Start wieder ab.
+  - Die Vorgängerversion mit Bluetooth-Taste und Neustart ist als Tag `firmware-ng-bt-v1` gesichert (siehe `VERSIONEN.md`).
+- **Speicher**: Bluetooth reserviert fest ca. 56 KB intern, der Stack braucht weitere ca. 33 KB. Damit das Radio daneben läuft: WLAN- und Netzwerkpuffer im PSRAM, kleine Speicherblöcke ab 4 KB ebenfalls, feste WLAN-Puffer reduziert (Empfang 10, Senden 6), die AAC-Decoder-Puffer (20 KB) im PSRAM statt als DMA-Speicher. Gemessen: Radio mit Bluetooth im Hintergrund ca. 27 KB frei, Bluetooth-Ton ca. 32 KB, Radio mit noch verbundenem Handy ca. 18 KB.
 - **WLAN beim Start**: Der erste Versuch scheitert beim Kaltstart oft. Die Firmware versucht dasselbe WLAN bis zu 3-mal, startet dann einmal neu und geht erst danach in den AP-Modus „WifiKaRadio“.
 - **Mute-Poti** (`P_MUTE_POT`, GPIO 36): Schleifer des originalen Ein/Aus-Knopfs. Es zählt die Drehrichtung: ca. 5 % aufdrehen → Mute aus, ca. 5 % zudrehen → Mute an. Nach dem Einschalten ist Mute aus.
   - **Zurzeit abgeschaltet** (`P_MUTE_POT` = 255 in `standard_psram_dan_keys.csv`), weil Poti und Widerstand noch fehlen und der offene Pin von selbst „Mute an“ auslöste. Nach dem Einlöten auf `36` setzen und die Konfiguration neu flashen (`flash.ps1` ohne `-OhneKonfig`).
@@ -79,11 +79,11 @@ Ein Tastendruck zeigt `stationkeys: Taste n -> Sender n`. Beim Drehen am Poti er
 
 Bluetooth und Mute (`firmware-ng-bt`):
 ```
-stationkeys: Bluetooth-Taste an GPIO 2
-stationkeys: Mute-Poti an GPIO 36 (ADC1 Kanal 0)
-btspeaker: Bluetooth-Betrieb, freier Speicher …      (Taste 6 eingerastet)
-btspeaker: sichtbar als "Biennophone"
-btspeaker: Handy verbunden / Wiedergabe startet (44100 Hz)
-stationkeys: Mute an / Mute aus                       (Ein/Aus-Knopf gedreht)
-btspeaker: Bluetooth aus, zurueck zum Radio           (Sendertaste)
+btspeaker: sichtbar als "Biennophone" (intern frei …, Stack braucht …)
+btspeaker: Handy verbunden
+btspeaker: Handy spielt (44100 Hz)
+btspeaker: Bluetooth-Ton an (intern frei …)
+btspeaker: Handy pausiert
+btspeaker: zurueck zum Radio (intern frei …)          (15 s Pause, Trennen oder Sendertaste)
+stationkeys: Mute an / Mute aus                       (Ein/Aus-Knopf gedreht, falls P_MUTE_POT gesetzt)
 ```

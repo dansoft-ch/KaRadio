@@ -10,7 +10,7 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 | `firmware-ng` | Branch | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig (`firmware/`) | funktioniert, getestet 06.11.2026 |
 | `firmware-ng-v1` | Tag + Release | fester Stand von `firmware-ng` mit fertigen `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern** |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
-| `firmware-ng-bt` | Branch | Weiterentwicklung: Bluetooth **immer an**, automatische Umschaltung (Plan v2) | in Arbeit |
+| `firmware-ng-bt` | Branch | **v2**: Bluetooth **immer an**, automatische Umschaltung Radio ↔ Handy, 6 Sendertasten | funktioniert, getestet 07.11.2026 |
 
 Regel: In `firmware-ng` wird nichts mehr geändert, solange `firmware-ng-bt` in Arbeit ist. Neues kommt nur in `firmware-ng-bt`.
 
@@ -99,13 +99,27 @@ Gemessen am 07.11.2026 (freier interner Speicher):
 
 Bekannte Grenzen: Wechsel nur per Neustart; Bluetooth-Betrieb hat wenig Speicherreserve.
 
-## Plan v2 (Branch `firmware-ng-bt`): Bluetooth immer an
+## Was v2 kann (Branch `firmware-ng-bt`): Bluetooth immer an
 
-- Bluetooth ist immer sichtbar, auch während das Radio spielt. Kein Neustart.
-- Handy verbindet sich und spielt → Radio stoppt, Ton vom Handy.
-- Handy trennt sich oder pausiert länger → zurück zum letzten Radiosender.
-- Taste 6 wird wieder Sender 6.
-- Voraussetzung: Beim Radio-Streaming mit laufendem Bluetooth bleiben stabil mindestens ca. 20 KB intern frei. Dafür werden weitere WLAN-Puffer in den PSRAM verschoben. Reicht es nicht, bleibt `firmware-ng-bt-v1`.
+- Bluetooth ist immer sichtbar als „Biennophone“, auch während das Radio spielt. Kein Neustart, keine Bluetooth-Taste.
+- Handy verbindet sich und spielt → Radio stoppt, nach ca. 1 s kommt der Ton vom Handy.
+- Pause am Handy länger als 15 s oder Handy getrennt → der letzte Radiosender spielt wieder.
+- Play am Handy → sofort wieder Ton vom Handy.
+- Sendertaste während Bluetooth → Handy wird getrennt, der gewählte Sender spielt.
+- Taste 6 ist wieder Sender 6.
+- Lautstärke-Poti wirkt bei Radio und Bluetooth.
+
+Damit Radio und Bluetooth zusammen in den Speicher passen:
+- WLAN- und Netzwerkpuffer im PSRAM, feste WLAN-Puffer reduziert (Empfang 10, Senden 6).
+- Die zwei Puffer des AAC-Decoders (20 KB) liegen im PSRAM statt intern.
+
+Gemessen am 07.11.2026 (freier interner Speicher, Test mit Handy):
+
+| Betrieb | frei |
+|---|---|
+| Radio, Bluetooth im Hintergrund | stabil ca. 27 KB |
+| Bluetooth-Ton vom Handy | stabil ca. 32 KB |
+| Radio, Handy noch verbunden (nach Pause) | ca. 18 KB |
 
 ## Mute über den Ein/Aus-Knopf
 
