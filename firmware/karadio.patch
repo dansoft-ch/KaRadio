@@ -55,18 +55,19 @@ index 5052a47..08d6ecd 100644
  	"addonu8g2.c"
  	"addonucg.c"
 diff --git a/main/app_main3.h b/main/app_main3.h
-index 1639154..09bbc9c 100644
+index 1639154..d545d46 100644
 --- a/main/app_main3.h
 +++ b/main/app_main3.h
-@@ -27,6 +27,7 @@ Copyright (C) 2017  KaraWin
+@@ -27,6 +27,8 @@ Copyright (C) 2017  KaraWin
  #include <string.h>
  #include <stdbool.h>
  #include <nvs.h>
 +#include "stationkeys.h"
++#include "soc/rtc_wdt.h"
  #include "freertos/FreeRTOS.h"
  #include "freertos/task.h"
  #include "freertos/event_groups.h"
-@@ -1145,6 +1146,7 @@ void app_main()
+@@ -1145,12 +1147,15 @@ void app_main()
  	vTaskDelay(1);
  	xTaskCreatePinnedToCore (task_addon, "task_addon", 2200, NULL, PRIO_ADDON, &pxCreatedTask,CPU_ADDON);  
  	ESP_LOGI(TAG, "%s task: %x","task_addon",(unsigned int)pxCreatedTask);	
@@ -74,6 +75,14 @@ index 1639154..09bbc9c 100644
  
  	vTaskDelay(60);// wait tasks init
  	ESP_LOGI(TAG," Init Done");
+ 	
+ 	setIvol( g_device->vol);
+ 	kprintf("READY. Type help for a list of commands\n");
++	rtc_wdt_disable(); // dansoft-ch: Start fertig, Start-Waechter (RTC-Watchdog ab Bootloader) aus
++	printf("Start-Waechter aus (Neustart-Grund beim Start: %d)\n", esp_reset_reason());
+ 	// error log on telnet
+ 	esp_log_set_vprintf( (vprintf_like_t)lkprintf);
+ 	//autostart		
 diff --git a/main/ota.c b/main/ota.c
 index ea6e448..1abf73d 100644
 --- a/main/ota.c
@@ -138,10 +147,21 @@ index af1c795..790ac1c 100644
  device,	  0x40,      ,   ,         0x1000
  # the stations partition
 diff --git a/sdkconfig b/sdkconfig
-index 8441d22..3d4bb9d 100644
+index 8441d22..698c01c 100644
 --- a/sdkconfig
 +++ b/sdkconfig
-@@ -163,7 +163,20 @@ CONFIG_AWS_IOT_SDK=
+@@ -34,7 +34,9 @@ CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_8V=
+ CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_9V=y
+ CONFIG_BOOTLOADER_FACTORY_RESET=
+ CONFIG_BOOTLOADER_APP_TEST=
+-CONFIG_BOOTLOADER_WDT_ENABLE=
++CONFIG_BOOTLOADER_WDT_ENABLE=y
++CONFIG_BOOTLOADER_WDT_DISABLE_IN_USER_CODE=y
++CONFIG_BOOTLOADER_WDT_TIME_MS=90000
+ CONFIG_APP_ROLLBACK_ENABLE=
+ 
+ #
+@@ -163,7 +165,20 @@ CONFIG_AWS_IOT_SDK=
  #
  # Bluetooth
  #
@@ -163,7 +183,7 @@ index 8441d22..3d4bb9d 100644
  CONFIG_BTDM_CTRL_BR_EDR_SCO_DATA_PATH_EFF=0
  CONFIG_BTDM_CTRL_AUTO_LATENCY_EFF=
  CONFIG_BTDM_CTRL_LEGACY_AUTH_VENDOR_EVT_EFF=
-@@ -171,7 +184,7 @@ CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN_EFF=0
+@@ -171,7 +186,7 @@ CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN_EFF=0
  CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_ACL_CONN_EFF=0
  CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_SYNC_CONN_EFF=0
  CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE=0
@@ -172,7 +192,7 @@ index 8441d22..3d4bb9d 100644
  CONFIG_BLE_MESH=
  
  #
-@@ -298,9 +311,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
+@@ -298,9 +313,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
  CONFIG_ULP_COPROC_ENABLED=
  CONFIG_ULP_COPROC_RESERVE_MEM=0
  CONFIG_ESP32_PANIC_PRINT_HALT=
