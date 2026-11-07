@@ -61,13 +61,17 @@ Gebaut wird immer derselbe Ka-Radio32-Stand (Release 2.4 R1, fester Commit) plus
 
 Ziel: Das Handy verbindet sich per Bluetooth mit dem Radio und spielt Musik über den Lautsprecher (A2DP-Sink). Nur der WROVER kann das (klassisches Bluetooth); der ESP32-S3 hat nur Bluetooth Low Energy.
 
-| Aktion | Ergebnis |
+Die Tasten des Radios sind **Rasttasten** (eine bleibt eingerastet, ein Druck auf eine andere löst sie). Die eingerastete Taste bestimmt also immer die Betriebsart:
+
+| Zustand | Ergebnis |
 |---|---|
-| Taste 6 (GPIO 2) im Radio-Betrieb | Radio stoppt, Bluetooth geht an, Handy kann sich verbinden |
-| Taste 1–5 im Bluetooth-Betrieb | Bluetooth aus, Radio spielt den gewählten Sender |
+| Taste 6 (GPIO 2) rastet ein | Radio stoppt, Bluetooth geht an, Handy findet das Radio als **„Biennophone“** |
+| Taste 1–5 rastet ein (Taste 6 springt heraus) | Bluetooth aus, Radio spielt den gewählten Sender |
+| Einschalten mit eingerasteter Taste 6 | startet direkt als Bluetooth-Lautsprecher (kein Radio-Stream) |
+| Einschalten mit Taste 1–5 | Radio wie bisher |
 | Poti | Lautstärke in beiden Betriebsarten |
-| Einschalten | startet immer als Radio |
 
-Folge: Es gibt nur noch 5 Sendertasten. Bluetooth läuft nur nach Taste 6, damit es nicht gleichzeitig mit dem Radio-Streaming um Speicher und Antenne konkurriert.
-
-Noch offen: Verhalten bei erneutem Druck auf Taste 6, WLAN im Bluetooth-Betrieb an/aus, Bluetooth-Name.
+- Es gibt nur noch 5 Sendertasten.
+- WLAN bleibt im Bluetooth-Betrieb vorerst an (Weboberfläche erreichbar). Gibt es Aussetzer im Bluetooth-Ton, wird es dort abgeschaltet.
+- Bluetooth läuft nur, solange Taste 6 eingerastet ist, damit es nicht gleichzeitig mit dem Radio-Streaming um Speicher und Antenne konkurriert.
+- Eingerastete Tasten beim Einschalten sind unkritisch: GPIO 2, 5 und 15 stören nur beim Flashen bzw. unterdrücken die Startmeldungen. Zum Flashen sicherheitshalber Taste 1 (GPIO 13) einrasten.
