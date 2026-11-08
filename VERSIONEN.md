@@ -1,6 +1,9 @@
 # Versionen und Branches – Übersicht
 
-Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 07.11.2026.
+Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 08.11.2026.
+
+> **Auf dem Radio läuft: `firmware-ng-bt-v2`** (geflasht 07.11.2026). Funktioniert, hat aber einen bekannten Fehler: Nach Bluetooth-Betrieb setzt das Radio immer wieder ca. 30 s aus → [Bekannter Fehler in v2](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus).
+> Im Branch `firmware-ng-bt` liegt die Korrektur dafür → [Änderung nach v2](#änderung-nach-v2-umschalten-nur-bei-hörbarem-ton) (noch nicht gebaut und nicht getestet).
 
 ## Kurzfassung
 
@@ -10,8 +13,8 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 | `firmware-ng` | Branch | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig (`firmware/`) | funktioniert, getestet 06.11.2026 |
 | `firmware-ng-v1` | Tag + Release | fester Stand von `firmware-ng` mit fertigen `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern** |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
-| `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
-| `firmware-ng-bt` | Branch | Weiterentwicklung ab **v2**: Bluetooth **immer an**, automatische Umschaltung Radio ↔ Handy, 6 Sendertasten | funktioniert, getestet 07.11.2026 |
+| `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
+| `firmware-ng-bt` | Branch | **v2 + Korrektur** „Umschalten nur bei hörbarem Ton“ (08.11.2026) | **noch nicht gebaut, nicht getestet** |
 
 Regel: In `firmware-ng` wird nichts mehr geändert, solange `firmware-ng-bt` in Arbeit ist. Neues kommt nur in `firmware-ng-bt`.
 
@@ -104,7 +107,7 @@ Gemessen am 07.11.2026 (freier interner Speicher):
 
 Bekannte Grenzen: Wechsel nur per Neustart; Bluetooth-Betrieb hat wenig Speicherreserve.
 
-## Was v2 kann (Branch `firmware-ng-bt`): Bluetooth immer an
+## Was `firmware-ng-bt-v2` kann (läuft auf dem Radio): Bluetooth immer an
 
 - Bluetooth ist immer sichtbar als „Biennophone“, auch während das Radio spielt. Kein Neustart, keine Bluetooth-Taste.
 - Handy verbindet sich und spielt → Radio stoppt, nach ca. 1 s kommt der Ton vom Handy.
@@ -125,6 +128,65 @@ Gemessen am 07.11.2026 (freier interner Speicher, Test mit Handy):
 | Radio, Bluetooth im Hintergrund | stabil ca. 27 KB |
 | Bluetooth-Ton vom Handy | stabil ca. 32 KB |
 | Radio, Handy noch verbunden (nach Pause) | ca. 18 KB |
+
+### Bekannter Fehler in v2: Radio setzt immer wieder ca. 30 s aus
+
+**Gefunden:** 08.11.2026, im Alltag.
+
+**Ablauf:** Radio gehört → Musik vom Handy über Bluetooth → am Handy auf Pause → nach 15 s spielt wieder das Radio. Danach verstummt das Radio immer wieder für ca. 30 s und kommt dann von selbst zurück.
+
+**Protokoll vom Radio** (COM3, 115200 Baud, Handy noch verbunden, am Handy lief keine Musik):
+```
+09:15:09 btspeaker: Handy pausiert
+09:15:19 btspeaker: Handy spielt (44100 Hz)      ← Radio verstummt, vom Handy kommt nichts Hörbares
+09:15:57 btspeaker: Handy pausiert
+09:16:12 btspeaker: zurueck zum Radio (intern frei 46420)   ← 15 s nach „pausiert“
+09:16:16 ##CLI.PLAYING#                           ← Radio wieder hörbar
+```
+
+**Ursache:**
+- Mit Pause zurück zum Radio heisst: Das Handy bleibt verbunden. Nur eine Sendertaste trennt es.
+- Ein verbundenes Handy startet die Bluetooth-Wiedergabe auch für Benachrichtigungen, Tastentöne oder Apps, die den Ton kurz belegen. Oft schickt es dabei nur Stille.
+- v2 schaltet bei jedem „Handy spielt“ sofort aufs Handy und erst 15 s nach „Handy pausiert“ zurück. Dazu kommen ca. 4 s für den Neuaufbau des Radio-Streams.
+- Speichermangel ist es nicht: Beim Zurückschalten waren intern 46 KB frei.
+
+**Umgehen mit v2:** Zurück zum Radio immer mit einer Sendertaste (trennt das Handy), oder am Handy „Biennophone“ trennen bzw. Bluetooth ausschalten.
+
+## Änderung nach v2: Umschalten nur bei hörbarem Ton
+
+**Stand:** 08.11.2026 im Branch `firmware-ng-bt`. **Noch nicht gebaut, nicht geflasht, nicht getestet.** Auf dem Radio läuft weiter v2.
+
+**Warum:** behebt den [bekannten Fehler in v2](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus).
+
+**Was sich ändert:**
+
+| Situation | v2 (läuft) | neu (Branch) |
+|---|---|---|
+| Handy meldet „spielt“, aber nur Stille oder kurzer Ton | Radio verstummt sofort | Radio spielt weiter |
+| Handy spielt hörbar Musik | nach ca. 1 s Ton vom Handy | nach ca. 1,5 s Ton vom Handy (die ersten 1,5 s fehlen) |
+| Pause am Handy | nach 15 s zurück zum Radio | Radio bleibt still, Bluetooth-Betrieb bleibt |
+| Play am Handy nach Pause | sofort Ton vom Handy | sofort Ton vom Handy |
+| Handy trennt sich | zurück zum Radio | zurück zum Radio (unverändert) |
+| Sendertaste | trennt Handy, Sender spielt | trennt Handy, Sender spielt (unverändert) |
+
+Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy, getrennt = Radio“: Handys verbinden sich oft von selbst, sobald sie in Reichweite sind, und das Radio wäre dann stumm, ohne dass jemand Musik abspielt.
+
+**Wie es funktioniert** (`firmware/btspeaker.c`):
+- Solange das Radio spielt, prüft `checkAudible()` die Samples vom Handy. Hörbar heisst: Spitzenwert über `AUDIBLE_LEVEL` (300 von 32767, ca. −40 dB).
+- Nach `AUDIBLE_MS` (1500 ms) hörbarem Ton schaltet `btSpeakerPoll()` um und gibt `btspeaker: hoerbarer Ton vom Handy` aus.
+- `SILENCE_MS` (1000 ms) Stille setzt die Zählung zurück, damit mehrere kurze Töne nicht zusammengezählt werden.
+- Der 15-s-Rücksprung bei Pause (`BT_PAUSE_MS`) ist entfernt.
+
+**Bekannte Grenze:** Ein langer Ton vom Handy (z. B. ein Klingelton über Bluetooth) schaltet weiterhin um. Zurück dann mit einer Sendertaste.
+
+**Testplan nach dem Flashen:**
+1. Radio spielt, Handy verbunden, am Handy nichts abspielen → Radio läuft mehrere Minuten ohne Aussetzer, auch bei Benachrichtigungen.
+2. Musik am Handy starten → nach ca. 1,5 s Ton vom Handy.
+3. Pause am Handy → Radio bleibt still. Play → Ton vom Handy.
+4. Sendertaste → Handy getrennt, Sender spielt.
+5. Handy-Bluetooth aus → Radio spielt wieder.
+
+**Falls es nicht klappt:** v2 wieder flashen (siehe [oben](#firmware-ng-bt-v2-bluetooth-immer-an)).
 
 ## Mute über den Ein/Aus-Knopf
 

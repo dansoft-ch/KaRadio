@@ -7,7 +7,7 @@ Ein altes **Biennophone** spielt wieder: Internetradio über WLAN, Bluetooth-Lau
 ## Auf einen Blick
 
 - **6 Sendertasten** – die originalen Rasttasten wählen je einen Internetradio-Sender.
-- **Bluetooth immer bereit** – das Radio erscheint auf dem Handy als **„Biennophone“**. Spielt das Handy Musik, schaltet das Radio in ca. 1 s um; Pause länger als 15 s, Handy getrennt oder eine Sendertaste → zurück zum Radio. Kein Neustart, keine Extra-Taste.
+- **Bluetooth immer bereit** – das Radio erscheint auf dem Handy als **„Biennophone“**. Spielt das Handy Musik, schaltet das Radio in ca. 1 s um; Pause länger als 15 s, Handy getrennt oder eine Sendertaste → zurück zum Radio. (Stand v2. Bekannter Fehler: Bleibt das Handy nach einer Pause verbunden, setzt das Radio immer wieder ca. 30 s aus; die Korrektur ist in Arbeit, siehe [VERSIONEN.md](VERSIONEN.md).) Kein Neustart, keine Extra-Taste.
 - **Originale Knöpfe** – der Lautstärke-Knopf regelt die Lautstärke, der Ein/Aus-Knopf schaltet über ein Reed-Relais den Strom und schaltet mit seinem Poti stumm (Mute).
 - **Robust** – Neustart nach Abstürzen, Start-Wächter (Hardware-Watchdog), mehrere WLAN-Versuche beim Kaltstart.
 - **Webinterface** von KaRadio für Senderliste und WLAN bleibt nutzbar.

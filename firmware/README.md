@@ -30,7 +30,7 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 
 ## Bluetooth-Lautsprecher und Mute (Branch `firmware-ng-bt`)
 
-- `btspeaker.c` / `.h` (v2): Bluetooth ist **immer an** und als **„Biennophone“** sichtbar (A2DP-Sink, Koppeln ohne PIN), auch während das Radio spielt. Startet das Handy die Wiedergabe, stoppt das Radio und nach ca. 1 s kommt der Handy-Ton über I2S an den MAX98357A. Pause länger als 15 s oder Handy getrennt → der letzte Sender spielt wieder. Eine Sendertaste trennt das Handy und spielt den Sender. Lautstärke-Poti und Mute wirken auch hier. Nur mit I2S-Ausgang, nicht mit VS1053.
+- `btspeaker.c` / `.h` (v2): Bluetooth ist **immer an** und als **„Biennophone“** sichtbar (A2DP-Sink, Koppeln ohne PIN), auch während das Radio spielt. Kommt vom Handy 1,5 s lang hörbarer Ton (Spitze über `AUDIBLE_LEVEL`), stoppt das Radio und der Handy-Ton geht über I2S an den MAX98357A. Stille und kurze Töne (Benachrichtigungen) schalten nicht um. Pause am Handy → Radio bleibt still; Handy getrennt → der letzte Sender spielt wieder. (Stand Branch 08.11.2026, ungetestet. Im Tag `firmware-ng-bt-v2` schaltet schon „Handy spielt“ um und eine Pause von 15 s zurück; Fehler und Änderung siehe `VERSIONEN.md`.) Eine Sendertaste trennt das Handy und spielt den Sender. Lautstärke-Poti und Mute wirken auch hier. Nur mit I2S-Ausgang, nicht mit VS1053.
   - I2S: KaRadio installiert den I2S-Treiber nur, solange ein Radio-Decoder läuft. `btspeaker.c` richtet ihn für Bluetooth selbst ein (nachdem der Decoder gestoppt ist) und baut ihn vor dem Radio-Start wieder ab.
   - Die Vorgängerversion mit Bluetooth-Taste und Neustart ist als Tag `firmware-ng-bt-v1` gesichert (siehe `VERSIONEN.md`).
 - **Speicher**: Bluetooth reserviert fest ca. 56 KB intern, der Stack braucht weitere ca. 33 KB. Damit das Radio daneben läuft: WLAN- und Netzwerkpuffer im PSRAM, kleine Speicherblöcke ab 4 KB ebenfalls, feste WLAN-Puffer reduziert (Empfang 10, Senden 6), die AAC-Decoder-Puffer (20 KB) im PSRAM statt als DMA-Speicher. Gemessen: Radio mit Bluetooth im Hintergrund ca. 27 KB frei, Bluetooth-Ton ca. 32 KB, Radio mit noch verbundenem Handy ca. 18 KB.
@@ -94,8 +94,9 @@ Bluetooth und Mute (`firmware-ng-bt`):
 btspeaker: sichtbar als "Biennophone" (intern frei …, Stack braucht …)
 btspeaker: Handy verbunden
 btspeaker: Handy spielt (44100 Hz)
+btspeaker: hoerbarer Ton vom Handy                    (nach 1,5 s hörbarem Ton)
 btspeaker: Bluetooth-Ton an (intern frei …)
 btspeaker: Handy pausiert
-btspeaker: zurueck zum Radio (intern frei …)          (15 s Pause, Trennen oder Sendertaste)
+btspeaker: zurueck zum Radio (intern frei …)          (Trennen oder Sendertaste)
 stationkeys: Mute an / Mute aus                       (Ein/Aus-Knopf gedreht, falls P_MUTE_POT gesetzt)
 ```

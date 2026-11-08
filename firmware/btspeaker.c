@@ -2,10 +2,12 @@
  * btspeaker.c - Bluetooth-Lautsprecher (A2DP-Sink) für KaRadio32 (dansoft-ch/KaRadio)
  *
  * v2: Bluetooth ist immer an und als "Biennophone" sichtbar, auch während das
- * Radio spielt. Startet das Handy die Wiedergabe, stoppt das Radio und der Ton
- * vom Handy kommt über den I2S-Ausgang von KaRadio (render_samples, damit
- * wirken Lautstärke und Mute). Trennt sich das Handy oder pausiert es länger
- * als BT_PAUSE_MS, spielt wieder der letzte Radiosender.
+ * Radio spielt. Kommt vom Handy hörbarer Ton (AUDIBLE_MS lang über AUDIBLE_LEVEL),
+ * stoppt das Radio und der Ton vom Handy kommt über den I2S-Ausgang von KaRadio
+ * (render_samples, damit wirken Lautstärke und Mute). Stille oder kurze Töne
+ * (Benachrichtigungen, Tastentöne) schalten nicht um.
+ * Zurück zum Radio nur, wenn sich das Handy trennt oder eine Sendertaste
+ * gedrückt wird. Eine Pause am Handy lässt das Radio still.
  *
  * Die Umschaltung läuft in btSpeakerPoll() (aus dem stationkeys-Task), nicht in
  * den Bluetooth-Callbacks.
@@ -37,7 +39,9 @@
 #include "btspeaker.h"
 
 #define TAG "btspeaker"
-#define BT_PAUSE_MS     15000   // so lange Pause, dann zurück zum Radio
+#define AUDIBLE_LEVEL   300     // Spitzenwert (von 32767, ca. -40 dB), ab dem Ton hörbar ist
+#define AUDIBLE_MS      1500    // so lange hörbarer Ton, dann aufs Handy umschalten
+#define SILENCE_MS      1000    // so lange Stille setzt die Zählung zurück
 #define DECODER_WAIT_MS 3000    // max. Wartezeit, bis der Radio-Decoder gestoppt ist
 
 extern player_t* player_config;  // aus app_main
@@ -47,7 +51,9 @@ static bool s_stackUp = false;
 static volatile bool s_active = false;      // Bluetooth-Ton läuft, Radio gesperrt
 static volatile bool s_connected = false;
 static volatile bool s_wantBt = false;      // Handy spielt (A2DP gestartet)
-static volatile TickType_t s_pauseSince = 0; // Zeitpunkt der Pause, 0 = keine
+static volatile bool s_audible = false;     // Handy liefert hörbaren Ton
+static uint32_t s_audibleFrames = 0;        // hörbare Samples am Stück (nur A2DP-Task)
+static uint32_t s_silentFrames = 0;         // stille Samples am Stück (nur A2DP-Task)
 static volatile bool s_i2sReady = false;    // unser I2S-Treiber ist installiert
 static SemaphoreHandle_t s_i2sMux = NULL;   // schützt i2s_write gegen Abbau
 static esp_bd_addr_t s_peer;
@@ -98,12 +104,14 @@ static void a2dCb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 	case ESP_A2D_AUDIO_STATE_EVT:
 		if (param->audio_stat.state == ESP_A2D_AUDIO_STATE_STARTED) {
 			printf("btspeaker: Handy spielt (%u Hz)\n", s_rate);
-			s_pauseSince = 0;
+			s_audibleFrames = 0;
+			s_silentFrames = 0;
+			s_audible = false;
 			s_wantBt = true;
 		} else {
 			printf("btspeaker: Handy pausiert\n");
-			s_pauseSince = xTaskGetTickCount();
-			if (s_pauseSince == 0) s_pauseSince = 1;
+			s_wantBt = false;
+			s_audible = false;
 		}
 		break;
 	case ESP_A2D_AUDIO_CFG_EVT:
@@ -120,10 +128,37 @@ static void a2dCb(esp_a2d_cb_event_t event, esp_a2d_cb_param_t *param)
 	}
 }
 
+// Radio spielt noch: prüfen, ob das Handy hörbaren Ton liefert (nicht nur Stille
+// oder einen kurzen Ton). Läuft im A2DP-Task.
+static void checkAudible(const uint8_t *data, uint32_t len)
+{
+	if (s_audible) return;
+	const int16_t *smp = (const int16_t *)data;
+	uint32_t n = len / 2;
+	bool loud = false;
+	for (uint32_t i = 0; i < n; i++) {
+		if (smp[i] > AUDIBLE_LEVEL || smp[i] < -AUDIBLE_LEVEL) { loud = true; break; }
+	}
+	uint32_t frames = len / 4;   // Stereo, 16 Bit
+	if (loud) {
+		s_silentFrames = 0;
+		s_audibleFrames += frames;
+		if (s_audibleFrames >= s_rate / 1000 * AUDIBLE_MS) s_audible = true;
+	} else {
+		s_silentFrames += frames;
+		if (s_silentFrames >= s_rate / 1000 * SILENCE_MS) s_audibleFrames = 0;
+	}
+}
+
 // Läuft im A2DP-Task: PCM 16 Bit, Stereo, verschachtelt.
 static void a2dDataCb(const uint8_t *data, uint32_t len)
 {
-	if (!s_active || !s_i2sReady || len == 0) return;
+	if (len == 0) return;
+	if (!s_active) {
+		if (s_wantBt) checkAudible(data, len);
+		return;
+	}
+	if (!s_i2sReady) return;
 	if (xSemaphoreTake(s_i2sMux, 0) != pdTRUE) return;   // gerade Umschaltung
 	if (s_i2sReady) {
 		if (len > s_bufLen) {
@@ -226,13 +261,14 @@ static void leaveBt(bool playRadio)
 void btSpeakerPoll(void)
 {
 	if (!s_stackUp) return;
-	bool pausedLong = (s_pauseSince != 0) &&
-		((xTaskGetTickCount() - s_pauseSince) > (BT_PAUSE_MS / portTICK_PERIOD_MS));
-
-	if (!s_active && s_wantBt && s_pauseSince == 0) enterBt();
-	else if (s_active && (!s_connected || !s_wantBt || pausedLong)) {
+	// Umschalten aufs Handy nur bei hörbarem Ton, zurück nur beim Trennen
+	// (oder per Sendertaste, siehe btSpeakerToRadio). Pause = Radio bleibt still.
+	if (!s_active && s_connected && s_wantBt && s_audible) {
+		printf("btspeaker: hoerbarer Ton vom Handy\n");
+		enterBt();
+	} else if (s_active && !s_connected) {
 		s_wantBt = false;
-		s_pauseSince = 0;
+		s_audible = false;
 		leaveBt(true);
 	}
 }
@@ -241,7 +277,7 @@ void btSpeakerToRadio(void)
 {
 	if (!s_active) return;
 	s_wantBt = false;
-	s_pauseSince = 0;
+	s_audible = false;
 	if (s_connected) esp_a2d_sink_disconnect(s_peer);   // sonst holt das Handy den Ton zurück
 	leaveBt(false);   // Sender spielt der Aufrufer
 }
