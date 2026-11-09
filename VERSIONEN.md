@@ -1,9 +1,9 @@
 # Versionen und Branches – Übersicht
 
-Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 08.11.2026.
+Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 09.11.2026.
 
-> **Auf dem Radio läuft: `firmware-ng-bt-v2`** (geflasht 07.11.2026). Funktioniert, hat aber einen bekannten Fehler: Nach Bluetooth-Betrieb setzt das Radio immer wieder ca. 30 s aus → [Bekannter Fehler in v2](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus).
-> Im Branch `firmware-ng-bt` liegt die Korrektur dafür → [Änderung nach v2](#änderung-nach-v2-umschalten-nur-bei-hörbarem-ton) (noch nicht gebaut und nicht getestet).
+> **Auf dem Radio läuft: `firmware-ng-bt-v3`** (Code aus Commit `6bc741d`, Build `0e9ef99`, geflasht 09.11.2026, getestet: alles ok). Das ist v2 plus die Korrektur [„Umschalten nur bei hörbarem Ton“](#änderung-nach-v2-umschalten-nur-bei-hörbarem-ton).
+> Letzte gesicherte Version davor: Tag `firmware-ng-bt-v2`, mit [bekanntem Fehler](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus) (Radio setzt nach Bluetooth-Betrieb immer wieder ca. 30 s aus).
 
 ## Kurzfassung
 
@@ -13,8 +13,9 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 | `firmware-ng` | Branch | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig (`firmware/`) | funktioniert, getestet 06.11.2026 |
 | `firmware-ng-v1` | Tag + Release | fester Stand von `firmware-ng` mit fertigen `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern** |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
-| `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
-| `firmware-ng-bt` | Branch | **v2 + Korrektur** „Umschalten nur bei hörbarem Ton“ (08.11.2026) | **noch nicht gebaut, nicht getestet** |
+| `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
+| `firmware-ng-bt-v3` | Tag | **v3** = v2 + Korrektur „Umschalten nur bei hörbarem Ton“; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 09.11.2026 |
+| `firmware-ng-bt` | Branch | Weiterentwicklung ab **v3** | Stand = v3 |
 
 Regel: In `firmware-ng` wird nichts mehr geändert, solange `firmware-ng-bt` in Arbeit ist. Neues kommt nur in `firmware-ng-bt`.
 
@@ -39,7 +40,11 @@ Achtung: Die Konfiguration im Tag hat Taste 6 = Bluetooth und das Mute-Poti aus.
 
 ### `firmware-ng-bt-v2` (Bluetooth immer an)
 
-Genauso, nur mit `git switch --detach firmware-ng-bt-v2`. Konfiguration: 6 Sendertasten, Mute-Poti an GPIO 36.
+Genauso, nur mit `git switch --detach firmware-ng-bt-v2`. Konfiguration: 6 Sendertasten, Mute-Poti an GPIO 36. Achtung: hat den [bekannten Fehler](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus).
+
+### `firmware-ng-bt-v3` (Bluetooth immer an, nur bei hörbarem Ton)
+
+Genauso, mit `git switch --detach firmware-ng-bt-v3`. Konfiguration wie v2. Am 09.11.2026 mit `-OhneKonfig` geflasht (nur Firmware, Konfiguration auf dem Radio unverändert).
 
 Sender, WLAN-Daten und Einstellungen bleiben bei beiden erhalten. Mehr Details: `firmware/README.md`.
 
@@ -107,7 +112,7 @@ Gemessen am 07.11.2026 (freier interner Speicher):
 
 Bekannte Grenzen: Wechsel nur per Neustart; Bluetooth-Betrieb hat wenig Speicherreserve.
 
-## Was `firmware-ng-bt-v2` kann (läuft auf dem Radio): Bluetooth immer an
+## Was `firmware-ng-bt-v2` kann: Bluetooth immer an
 
 - Bluetooth ist immer sichtbar als „Biennophone“, auch während das Radio spielt. Kein Neustart, keine Bluetooth-Taste.
 - Handy verbindet sich und spielt → Radio stoppt, nach ca. 1 s kommt der Ton vom Handy.
@@ -154,7 +159,7 @@ Gemessen am 07.11.2026 (freier interner Speicher, Test mit Handy):
 
 ## Änderung nach v2: Umschalten nur bei hörbarem Ton
 
-**Stand:** 08.11.2026 im Branch `firmware-ng-bt`. **Noch nicht gebaut, nicht geflasht, nicht getestet.** Auf dem Radio läuft weiter v2.
+**Stand:** Tag `firmware-ng-bt-v3`. Code aus Commit `6bc741d` (08.11.2026), Build `0e9ef99`. **Geflasht und getestet am 09.11.2026, läuft auf dem Radio.**
 
 **Warum:** behebt den [bekannten Fehler in v2](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus).
 
@@ -179,14 +184,18 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 
 **Bekannte Grenze:** Ein langer Ton vom Handy (z. B. ein Klingelton über Bluetooth) schaltet weiterhin um. Zurück dann mit einer Sendertaste.
 
-**Testplan nach dem Flashen:**
-1. Radio spielt, Handy verbunden, am Handy nichts abspielen → Radio läuft mehrere Minuten ohne Aussetzer, auch bei Benachrichtigungen.
-2. Musik am Handy starten → nach ca. 1,5 s Ton vom Handy.
-3. Pause am Handy → Radio bleibt still. Play → Ton vom Handy.
-4. Sendertaste → Handy getrennt, Sender spielt.
-5. Handy-Bluetooth aus → Radio spielt wieder.
+**Test am 09.11.2026** (am Gerät):
 
-**Falls es nicht klappt:** v2 wieder flashen (siehe [oben](#firmware-ng-bt-v2-bluetooth-immer-an)).
+| Schritt | Ergebnis |
+|---|---|
+| Handy seit längerem verbunden, am Handy nichts abgespielt | Radio läuft ohne Aussetzer ✔ |
+| Video am Handy gestartet | Ton kommt über das Radio ✔ |
+| Video zu Ende | Radio bleibt still (wie gewollt) ✔ |
+| Video erneut gestartet | Ton ok ✔ |
+| Taste 2 | Handy getrennt, Radio spielt wieder ✔ |
+| Bluetooth am Handy ausschalten | nicht getestet |
+
+**Falls es Probleme gibt:** v2 wieder flashen (siehe [oben](#firmware-ng-bt-v2-bluetooth-immer-an)); dann gilt wieder der bekannte Fehler von v2.
 
 ## Mute über den Ein/Aus-Knopf
 
