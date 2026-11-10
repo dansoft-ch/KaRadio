@@ -7,17 +7,17 @@ Ein altes **Biennophone** spielt wieder: Internetradio über WLAN, Bluetooth-Lau
 ## Auf einen Blick
 
 - **6 Sendertasten** – die originalen Rasttasten wählen je einen Internetradio-Sender.
-- **Bluetooth immer bereit** – das Radio erscheint auf dem Handy als **„Biennophone“**. Spielt das Handy Musik, schaltet das Radio in ca. 1 s um; Pause länger als 15 s, Handy getrennt oder eine Sendertaste → zurück zum Radio. Kein Neustart, keine Extra-Taste.
+- **Bluetooth immer bereit** – das Radio erscheint auf dem Handy als **„Biennophone“**. Spielt das Handy hörbar Musik oder ein Video, schaltet das Radio nach ca. 1,5 s um; Benachrichtigungen und Stille schalten nicht um. Pause am Handy → das Radio bleibt still. Handy getrennt oder eine Sendertaste → zurück zum Radio. (Seit 09.11.2026; bis Tag `firmware-ng-bt-v2` setzte das Radio nach Bluetooth-Betrieb immer wieder ca. 30 s aus, siehe [VERSIONEN.md](VERSIONEN.md).) Kein Neustart, keine Extra-Taste.
 - **Originale Knöpfe** – der Lautstärke-Knopf regelt die Lautstärke, der Ein/Aus-Knopf schaltet über ein Reed-Relais den Strom und schaltet mit seinem Poti stumm (Mute).
 - **Robust** – Neustart nach Abstürzen, Start-Wächter (Hardware-Watchdog), mehrere WLAN-Versuche beim Kaltstart.
 - **Webinterface** von KaRadio für Senderliste und WLAN bleibt nutzbar.
 
 ## Stabile Version
 
-> **Stand 07.11.2026: [`firmware-ng-bt-v2`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt-v2)** – läuft stabil mit WLAN und Bluetooth, am Gerät getestet.
-> Die fertigen Dateien zum Flashen liegen im Tag unter [`firmware/bin/`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt-v2/firmware/bin).
+> **Stand 09.11.2026: [`firmware-ng-bt-v3`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt-v3)** – läuft stabil mit WLAN und Bluetooth, am Gerät getestet.
+> Die fertigen Dateien zum Flashen liegen im Tag unter [`firmware/bin/`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt-v3/firmware/bin).
 
-Weiterentwickelt wird im Branch [`firmware-ng-bt`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt). Eine Übersicht aller Versionen steht in [`VERSIONEN.md`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt-v2/VERSIONEN.md), das Factsheet zum Ausdrucken (2 Seiten, inkl. Flash-Anleitung) in [`KaRadio-Factsheet-FirmwareNG-BT.docx`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt/KaRadio-Factsheet-FirmwareNG-BT.docx).
+Weiterentwickelt wird in `main`. Eine Übersicht aller Versionen steht in [`VERSIONEN.md`](https://github.com/dansoft-ch/KaRadio/blob/main/VERSIONEN.md), das Factsheet zum Ausdrucken (2 Seiten, inkl. Flash-Anleitung) in [`KaRadio-Factsheet-FirmwareNG-BT.docx`](https://github.com/dansoft-ch/KaRadio/blob/main/KaRadio-Factsheet-FirmwareNG-BT.docx).
 
 ## So funktioniert es
 
@@ -41,11 +41,11 @@ Warum nur ein ESP32-WROVER? Er kann **klassisches Bluetooth** (der ESP32-S3 kann
 | Ein/Aus-Knopf: Schalter | Reed-Relais in der 5-V-Zuleitung (ohne Firmware) |
 | IR-Empfänger (optional) | GPIO 21 |
 
-Potis nur an 3,3 V, nie an 5 V, und nur an ADC1-Pins (32–39). GPIO 2, 5 und 15 sind Boot-Pins – eingerastete Tasten beim Einschalten sind unkritisch, zum Flashen Taste 1 einrasten. Die Pins stehen in [`firmware/standard_psram_dan_keys.csv`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt-v2/firmware/standard_psram_dan_keys.csv) und lassen sich ohne neue Firmware ändern (Eintrag `255` = nicht benutzt).
+Potis nur an 3,3 V, nie an 5 V, und nur an ADC1-Pins (32–39). GPIO 2, 5 und 15 sind Boot-Pins – eingerastete Tasten beim Einschalten sind unkritisch, zum Flashen Taste 1 einrasten. Die Pins stehen in [`firmware/standard_psram_dan_keys.csv`](https://github.com/dansoft-ch/KaRadio/blob/main/firmware/standard_psram_dan_keys.csv) und lassen sich ohne neue Firmware ändern (Eintrag `255` = nicht benutzt).
 
 ## Flashen
 
-Die Dateien aus `firmware/bin/` des Tags `firmware-ng-bt-v2` (oder des aktuellen Branches nach `git pull`). `otadata_blank.bin` (8 KB, nur `FF`) liegt erst im Branch [`firmware-ng-bt`](https://github.com/dansoft-ch/KaRadio/tree/firmware-ng-bt/firmware/bin); sie ist immer gleich und passt zu jeder Version.
+Die Dateien aus `firmware/bin/` des Tags `firmware-ng-bt-v3` (oder von `main` nach `git pull`). `otadata_blank.bin` (8 KB, nur `FF`) ist immer gleich und passt zu jeder Version.
 
 | Adresse | Datei | Inhalt |
 |---|---|---|
@@ -57,7 +57,7 @@ Die Dateien aus `firmware/bin/` des Tags `firmware-ng-bt-v2` (oder des aktuellen
 
 **Variante A – Skript (PowerShell, nutzt esptool aus der Arduino IDE):**
 ```
-git switch --detach firmware-ng-bt-v2
+git switch --detach firmware-ng-bt-v3
 powershell -ExecutionPolicy Bypass -File .\firmware\flash.ps1 -Port COM3
 ```
 Das Skript prüft die Seriennummer des WROVER (bricht ab, wenn der ESP32-S3 dranhängt), löscht otadata und schreibt alle Dateien.
@@ -70,6 +70,8 @@ Nach dem Flashen meldet der serielle Monitor (115200 Baud) u. a. `btspeaker: sic
 
 ## Entwicklungsgeschichte
 
+Die Sketche der frühen Lösungen liegen heute in [`archiv/`](archiv/README.md).
+
 | Datum | Schritt | Was wir gelernt haben |
 |---|---|---|
 | 24.10.2026 | **Arduino Pro Mini sendet IR-Codes** (`TastaturCode.ino`, später mit Lautstärke `TastaturLautstaerkeIR.ino`) – die Tasten imitieren die IR-Fernbedienung von KaRadio. | Lautstärke per IR nur in Schritten, lief nur auf einem von drei Boards zuverlässig. |
@@ -77,7 +79,8 @@ Nach dem Flashen meldet der serielle Monitor (115200 Baud) u. a. `btspeaker: sic
 | 05.11.2026 | **ESP32-S3 als USB-Host** (`TastaturLautstaerkeUART-S3/`): schickt die Befehle übers USB-Kabel an den WROVER, startet ihn per RTS neu, wenn er beim Kaltstart hängt, RGB-LED zeigt Sender und Lautstärke. | Funktioniert, aber zwei Boards, eigener USB-Treiber und Start-Überwachung sind aufwendig. |
 | 06.11.2026 | **Firmware NG** (Branch `firmware-ng`, Tag `firmware-ng-v1`): KaRadio32 liest Tasten und Poti selbst; der S3 entfällt. Gebaut wird per GitHub Actions (ESP-IDF 3.3.6), weil lokal keine ESP-IDF-Umgebung nötig sein soll. | Eigene Funktionen gehören in eigene Dateien plus kleinen Patch – dann bleibt KaRadio wartbar. |
 | 07.11.2026 | **Bluetooth v1** (Tag `firmware-ng-bt-v1`): Taste 6 = Bluetooth, Wechsel per Neustart. Dazu Mute über den Ein/Aus-Knopf, Start-Wächter, WLAN-Wiederholversuche. | Bluetooth reserviert ca. 56 KB internen Speicher – ohne Gegenmassnahmen brach der Radio-Stream ab. KaRadio richtet I2S nur für den Radio-Decoder ein. |
-| 07.11.2026 | **Bluetooth v2** (Tag `firmware-ng-bt-v2`, **aktuell**): Bluetooth immer an, automatische Umschaltung, Taste 6 wieder Sender 6. | Mit WLAN-/Netzwerkpuffern und AAC-Puffern im PSRAM passen Radio und Bluetooth gleichzeitig in den Speicher (gemessen: 27 KB intern frei beim Radio, 32 KB bei Bluetooth). |
+| 07.11.2026 | **Bluetooth v2** (Tag `firmware-ng-bt-v2`): Bluetooth immer an, automatische Umschaltung, Taste 6 wieder Sender 6. | Mit WLAN-/Netzwerkpuffern und AAC-Puffern im PSRAM passen Radio und Bluetooth gleichzeitig in den Speicher (gemessen: 27 KB intern frei beim Radio, 32 KB bei Bluetooth). |
+| 09.11.2026 | **Bluetooth v3** (Tag `firmware-ng-bt-v3`, **aktuell**): Umschalten aufs Handy nur bei hörbarem Ton. | Ein verbundenes Handy meldet auch bei Benachrichtigungen und Stille „spielt“ – in v2 setzte das Radio dadurch immer wieder ca. 30 s aus. |
 
 ## Wichtige technische Entscheidungen
 
@@ -88,25 +91,25 @@ Nach dem Flashen meldet der serielle Monitor (115200 Baud) u. a. `btspeaker: sic
 
 ## Bauen
 
-Auf dem PC ist keine ESP-IDF nötig. GitHub Actions ([`.github/workflows/firmware.yml`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt-v2/.github/workflows/firmware.yml)) baut bei jedem Push in `firmware/`:
+Auf dem PC ist keine ESP-IDF nötig. GitHub Actions ([`.github/workflows/firmware.yml`](https://github.com/dansoft-ch/KaRadio/blob/main/.github/workflows/firmware.yml)) baut bei jedem Push in `firmware/`:
 
 1. Ka-Radio32 auf festem Commit (Release 2.4 R1) holen,
-2. [`firmware/karadio.patch`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt-v2/firmware/karadio.patch) anwenden und `stationkeys.c` / `btspeaker.c` dazukopieren,
+2. [`firmware/karadio.patch`](https://github.com/dansoft-ch/KaRadio/blob/main/firmware/karadio.patch) anwenden und `stationkeys.c` / `btspeaker.c` dazukopieren,
 3. mit ESP-IDF 3.3.6 bauen (Ubuntu-20.04-Container),
 4. die fertigen `.bin`-Dateien automatisch nach `firmware/bin/` committen. Bei einem Tag `firmware-ng-v*` entsteht zusätzlich ein GitHub-Release.
 
-Schlägt der Build fehl, stehen die Fehlerzeilen als Hinweise beim Build (auch ohne Anmeldung lesbar). Wie der Patch neu erzeugt wird, steht in [`CLAUDE.md`](https://github.com/dansoft-ch/KaRadio/blob/firmware-ng-bt-v2/CLAUDE.md).
+Schlägt der Build fehl, stehen die Fehlerzeilen als Hinweise beim Build (auch ohne Anmeldung lesbar). Wie der Patch neu erzeugt wird, steht in [`CLAUDE.md`](https://github.com/dansoft-ch/KaRadio/blob/main/CLAUDE.md).
 
 ## Repository
 
 | Ort | Inhalt |
 |---|---|
-| `main` | Ausgangslage mit ESP32-S3 und den Arduino-Sketchen (Pro Mini, S3) |
-| `firmware-ng` / Tag `firmware-ng-v1` | Firmware NG ohne Bluetooth |
-| Tag `firmware-ng-bt-v1` | Bluetooth über Taste 6, Wechsel per Neustart |
-| Tag `firmware-ng-bt-v2` | **stabile Version** – Bluetooth immer an |
-| Branch `firmware-ng-bt` | Weiterentwicklung ab v2 |
+| Branch `main` | aktueller Stand und Weiterentwicklung |
+| Tag `firmware-ng-bt-v3` | **stabile Version**, läuft auf dem Radio |
+| Tags `firmware-ng-bt-v1`, `-v2` | frühere Bluetooth-Versionen |
+| Tag `firmware-ng-v1` (+ Release) | Firmware NG ohne Bluetooth |
 | `firmware/` | eigener Code (`stationkeys.c`, `btspeaker.c`), Patch, Konfiguration, Flash-Skript, fertige `.bin` |
+| `archiv/` | frühere Lösungen mit Arduino Pro Mini (IR, UART) und ESP32-S3; Tags `archiv/promini-ir-uart`, `archiv/s3-usbhost` |
 | `VERSIONEN.md` | was welche Version kann und wie man zurückkommt |
 | `CLAUDE.md` | technische Projektnotizen (Ports, Seriennummern, Stolpersteine) |
 

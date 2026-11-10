@@ -1,0 +1,314 @@
+diff --git a/components/audio_renderer/audio_renderer.c b/components/audio_renderer/audio_renderer.c
+index 04dfa30..5bb37f4 100644
+--- a/components/audio_renderer/audio_renderer.c
++++ b/components/audio_renderer/audio_renderer.c
+@@ -9,6 +9,7 @@
+  */
+ 
+ #include <stdbool.h>
++#include <string.h>
+ #include <math.h>
+ #include "freertos/FreeRTOS.h"
+ #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+@@ -35,6 +36,10 @@
+ 
+ static renderer_config_t *renderer_instance = NULL;
+ static component_status_t renderer_status = UNINITIALIZED;
++static volatile bool renderer_mute = false; // dansoft-ch: Mute-Poti
++
++void renderer_set_mute(bool on) { renderer_mute = on; }
++bool renderer_get_mute() { return renderer_mute; }
+ //static QueueHandle_t i2s_event_queue;
+ 
+ static const uint32_t VUCP_PREAMBLE_B = 0xCCE80000; // 11001100 11101000
+@@ -449,6 +454,7 @@ void IRAM_ATTR render_samples(char *buf, uint32_t buf_len, pcm_format_t *buf_des
+ {
+     if(renderer_status != RUNNING)
+         return;
++	if (renderer_mute) memset(buf, 0, buf_len); // dansoft-ch: Mute
+ 
+ 	if(renderer_instance->output_mode == SPDIF)
+ 		render_spdif_samples(buf, buf_len, buf_desc);
+diff --git a/components/audio_renderer/include/audio_renderer.h b/components/audio_renderer/include/audio_renderer.h
+index 25e4149..11ae941 100644
+--- a/components/audio_renderer/include/audio_renderer.h
++++ b/components/audio_renderer/include/audio_renderer.h
+@@ -47,6 +47,8 @@ void render_samples(char *buf, uint32_t len, pcm_format_t *format);
+ void render_sample_block(short *sample_buff_ch0, short *sample_buff_ch1, int num_samples, unsigned int num_channels);
+ 
+ void renderer_volume(uint32_t volume);
++void renderer_set_mute(bool on);
++bool renderer_get_mute();
+ void renderer_init(renderer_config_t *config);
+ void renderer_start();
+ void renderer_stop();
+diff --git a/components/fdk-aac_decoder/fdk_aac_decoder.c b/components/fdk-aac_decoder/fdk_aac_decoder.c
+index 87d2dba..0111a28 100644
+--- a/components/fdk-aac_decoder/fdk_aac_decoder.c
++++ b/components/fdk-aac_decoder/fdk_aac_decoder.c
+@@ -53,13 +53,13 @@ void fdkaac_decoder_task(void *pvParameters)
+     //i2s_start(renderer_instance->i2s_num);
+ 
+     /* allocate sample buffer */
+-    buffer_t *pcm_buf = buf_create_dma(OUTPUT_BUFFER_SIZE);
++    buffer_t *pcm_buf = buf_create(OUTPUT_BUFFER_SIZE); // dansoft-ch: kein DMA noetig, darf in den PSRAM
+ 	if (pcm_buf==NULL) { ESP_LOGE(TAG,"malloc(pcm_buf) failed"); goto abort1; }
+     /* allocate bitstream buffer */
+ //    buffer_t *in_buf = buf_create(INPUT_BUFFER_SIZE*48);
+ 	buffer_t *in_buf  = NULL;
+ 	int bf = bigSram()?12:6;
+-    in_buf = buf_create_dma(INPUT_BUFFER_SIZE* bf );
++    in_buf = buf_create(INPUT_BUFFER_SIZE* bf ); // dansoft-ch: kein DMA noetig, darf in den PSRAM
+ 	if (in_buf==NULL) { 
+ 		ESP_LOGE(TAG,"buf_create in_buf failed"); 
+ 		buf_destroy( pcm_buf); 
+diff --git a/main/CMakeLists.txt b/main/CMakeLists.txt
+index 5052a47..08d6ecd 100644
+--- a/main/CMakeLists.txt
++++ b/main/CMakeLists.txt
+@@ -1,5 +1,7 @@
+ set(COMPONENT_SRCS 		
+ 	"addon.c"
++	"stationkeys.c"
++	"btspeaker.c"
+ 	"addoncommon.c"
+ 	"addonu8g2.c"
+ 	"addonucg.c"
+diff --git a/main/app_main3.h b/main/app_main3.h
+index 1639154..feaa36e 100644
+--- a/main/app_main3.h
++++ b/main/app_main3.h
+@@ -27,6 +27,9 @@ Copyright (C) 2017  KaraWin
+ #include <string.h>
+ #include <stdbool.h>
+ #include <nvs.h>
++#include "stationkeys.h"
++#include "soc/rtc_wdt.h"
++#include "esp_attr.h"
+ #include "freertos/FreeRTOS.h"
+ #include "freertos/task.h"
+ #include "freertos/event_groups.h"
+@@ -476,6 +479,10 @@ static void unParse(char* str)
+ 
+ 
+ 
++// dansoft-ch: Neustart-Zaehler fuer WLAN-Fehlstarts, uebersteht esp_restart()
++RTC_NOINIT_ATTR static uint32_t wifiRebootMagic;
++RTC_NOINIT_ATTR static uint32_t wifiReboots;
++
+ static void start_wifi()
+ {
+     ESP_LOGI(TAG, "starting wifi");
+@@ -592,8 +599,32 @@ static void start_wifi()
+ 		if ( (xEventGroupWaitBits(wifi_event_group, CONNECTED_AP,false, true, 1500) & CONNECTED_AP) ==0) 
+ 		//timeout . Try the next AP
+ 		{
++			// dansoft-ch: Der erste Versuch scheitert beim Kaltstart oft
++			// (auth -> init). Dasselbe WLAN bis zu 3x versuchen.
++			static int wifiTries = 0;
++			if ((g_device->current_ap != APMODE) && (++wifiTries < 3))
++			{
++				printf("WIFI: neuer Versuch %d\n", wifiTries + 1);
++				continue;
++			}
++			wifiTries = 0;
+ 			g_device->current_ap++;
+ 			g_device->current_ap %=3;
++			// dansoft-ch: Statt in den AP-Modus einmal neu starten, wenn ein WLAN
++			// eingerichtet ist. Erst wenn auch das scheitert: AP-Modus.
++			if ((g_device->current_ap == APMODE) && !getAutoWifi()
++				&& (strlen(g_device->ssid1) || strlen(g_device->ssid2)))
++			{
++				if (wifiRebootMagic != 0x57494649) { wifiRebootMagic = 0x57494649; wifiReboots = 0; }
++				if (wifiReboots < 1)
++				{
++					wifiReboots++;
++					printf("WIFI: kein WLAN, Neustart fuer einen neuen Versuch\n");
++					vTaskDelay(10);
++					esp_restart();
++				}
++				wifiReboots = 0;
++			}
+ 			if (getAutoWifi() && (g_device->current_ap == APMODE))
+ 			{
+ 				char inp = fgetc(stdin);
+@@ -603,7 +634,7 @@ static void start_wifi()
+ 			}
+ 			saveDeviceSettings(g_device);
+ 			ESP_LOGI(TAG,"device->current_ap: %d",g_device->current_ap);	
+-		}	else break;	// 					
++		}	else { wifiReboots = 0; break; } // dansoft-ch: verbunden	// 					
+ 	}					
+ }
+ 
+@@ -1145,12 +1176,15 @@ void app_main()
+ 	vTaskDelay(1);
+ 	xTaskCreatePinnedToCore (task_addon, "task_addon", 2200, NULL, PRIO_ADDON, &pxCreatedTask,CPU_ADDON);  
+ 	ESP_LOGI(TAG, "%s task: %x","task_addon",(unsigned int)pxCreatedTask);	
++	stationKeysStart(); // Sendertasten + Lautstaerke-Poti (dansoft-ch)
+ 
+ 	vTaskDelay(60);// wait tasks init
+ 	ESP_LOGI(TAG," Init Done");
+ 	
+ 	setIvol( g_device->vol);
+ 	kprintf("READY. Type help for a list of commands\n");
++	rtc_wdt_disable(); // dansoft-ch: Start fertig, Start-Waechter (RTC-Watchdog ab Bootloader) aus
++	printf("Start-Waechter aus (Neustart-Grund beim Start: %d)\n", esp_reset_reason());
+ 	// error log on telnet
+ 	esp_log_set_vprintf( (vprintf_like_t)lkprintf);
+ 	//autostart		
+diff --git a/main/ota.c b/main/ota.c
+index ea6e448..1abf73d 100644
+--- a/main/ota.c
++++ b/main/ota.c
+@@ -206,6 +206,7 @@ static void ota_task(void *pvParameter)
+     }
+ 
+ 	update_partition = esp_ota_get_next_update_partition(NULL);
++	if (update_partition == NULL) { wsUpgrade("no OTA partition", 0,100); goto exit; } // dansoft-ch
+     ESP_LOGI(TAG, "Writing to partition subtype %d at offset 0x%x",
+              update_partition->subtype, update_partition->address);
+     assert(update_partition != NULL);
+diff --git a/main/webclient.c b/main/webclient.c
+index 1a5a19e..73c7029 100644
+--- a/main/webclient.c
++++ b/main/webclient.c
+@@ -27,6 +27,7 @@
+ #include "audio_player.h"
+ #include "spiram_fifo.h"
+ #include "app_main.h"
++#include "btspeaker.h"
+ 
+ extern player_t* player_config;
+ #define min(a, b) (((a) < (b)) ? (a) : (b))
+@@ -907,6 +908,7 @@ void clientSetPort(uint16_t port)
+ 
+ void clientConnect()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	once = 0;
+ 	if((serverInfo = (struct hostent*)gethostbyname(cleanURL()))) {
+@@ -921,6 +923,7 @@ void clientConnect()
+ }
+ void clientConnectOnce()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	if((serverInfo = (struct hostent*)gethostbyname(cleanURL()))) {
+ 		xSemaphoreGive(sConnect);
+@@ -932,6 +935,7 @@ void clientConnectOnce()
+ }
+ void clientSilentConnect()
+ {
++	if (btSpeakerActive()) return; // dansoft-ch: Bluetooth-Betrieb
+ 	cstatus = C_HEADER;
+ 	once = 0;
+ 	if(serverInfo != NULL) {
+diff --git a/partitions.csv b/partitions.csv
+index af1c795..790ac1c 100644
+--- a/partitions.csv
++++ b/partitions.csv
+@@ -4,8 +4,8 @@ nvs,      data, nvs,     0x9000,  0x4000
+ otadata,  data, ota,     0xd000,  0x2000
+ phy_init, data, phy,     0xf000,  0x1000
+ # factory,  0,    0,       0x10000,  0x120000
+-ota_0,    0,    ota_0,   0x10000 ,  0x1C0000
+-ota_1,    0,    ota_1,   0x1D0000,  0x1C0000
++ota_0,    0,    ota_0,   0x10000 ,  0x380000
++# ota_1 entfernt (dansoft-ch): Bluetooth braucht Platz, device/stations/hardware bleiben an derselben Adresse
+ # the configuration partition
+ device,	  0x40,      ,   ,         0x1000
+ # the stations partition
+diff --git a/sdkconfig b/sdkconfig
+index 8441d22..697175a 100644
+--- a/sdkconfig
++++ b/sdkconfig
+@@ -34,7 +34,9 @@ CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_8V=
+ CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_9V=y
+ CONFIG_BOOTLOADER_FACTORY_RESET=
+ CONFIG_BOOTLOADER_APP_TEST=
+-CONFIG_BOOTLOADER_WDT_ENABLE=
++CONFIG_BOOTLOADER_WDT_ENABLE=y
++CONFIG_BOOTLOADER_WDT_DISABLE_IN_USER_CODE=y
++CONFIG_BOOTLOADER_WDT_TIME_MS=90000
+ CONFIG_APP_ROLLBACK_ENABLE=
+ 
+ #
+@@ -163,7 +165,20 @@ CONFIG_AWS_IOT_SDK=
+ #
+ # Bluetooth
+ #
+-CONFIG_BT_ENABLED=
++CONFIG_BT_ENABLED=y
++CONFIG_BTDM_CONTROLLER_MODE_BLE_ONLY=
++CONFIG_BTDM_CONTROLLER_MODE_BR_EDR_ONLY=y
++CONFIG_BTDM_CONTROLLER_MODE_BTDM=
++CONFIG_BLUEDROID_ENABLED=y
++CONFIG_CLASSIC_BT_ENABLED=y
++CONFIG_A2DP_ENABLE=y
++CONFIG_BT_SPP_ENABLED=
++CONFIG_HFP_ENABLE=
++CONFIG_GATTS_ENABLE=
++CONFIG_GATTC_ENABLE=
++CONFIG_BLE_SMP_ENABLE=
++CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST=y
++CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY=y
+ CONFIG_BTDM_CTRL_BR_EDR_SCO_DATA_PATH_EFF=0
+ CONFIG_BTDM_CTRL_AUTO_LATENCY_EFF=
+ CONFIG_BTDM_CTRL_LEGACY_AUTH_VENDOR_EVT_EFF=
+@@ -171,7 +186,7 @@ CONFIG_BTDM_CONTROLLER_BLE_MAX_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_ACL_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_BR_EDR_MAX_SYNC_CONN_EFF=0
+ CONFIG_BTDM_CONTROLLER_PINNED_TO_CORE=0
+-CONFIG_BT_RESERVE_DRAM=0
++CONFIG_BT_RESERVE_DRAM=0xdb5c
+ CONFIG_BLE_MESH=
+ 
+ #
+@@ -246,9 +261,9 @@ CONFIG_SPIRAM_SPEED_40M=y
+ CONFIG_SPIRAM_MEMTEST=y
+ CONFIG_SPIRAM_CACHE_WORKAROUND=
+ CONFIG_SPIRAM_BANKSWITCH_ENABLE=
+-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=8192
+-CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST=
+-CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=16384
++CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
++CONFIG_WIFI_LWIP_ALLOCATION_FROM_SPIRAM_FIRST=y
++CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
+ CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=
+ CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=
+ 
+@@ -298,9 +313,9 @@ CONFIG_CONSOLE_UART_BAUDRATE=115200
+ CONFIG_ULP_COPROC_ENABLED=
+ CONFIG_ULP_COPROC_RESERVE_MEM=0
+ CONFIG_ESP32_PANIC_PRINT_HALT=
+-CONFIG_ESP32_PANIC_PRINT_REBOOT=
++CONFIG_ESP32_PANIC_PRINT_REBOOT=y
+ CONFIG_ESP32_PANIC_SILENT_REBOOT=
+-CONFIG_ESP32_PANIC_GDBSTUB=y
++CONFIG_ESP32_PANIC_GDBSTUB=
+ CONFIG_GDBSTUB_SUPPORT_TASKS=y
+ CONFIG_GDBSTUB_MAX_TASKS=32
+ CONFIG_ESP32_DEBUG_OCDAWARE=
+@@ -349,16 +364,16 @@ CONFIG_ESP32_DPORT_DIS_INTERRUPT_LVL=5
+ #
+ # Wi-Fi
+ #
+-CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=14
+-CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=12
++CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM=10
++CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+ CONFIG_ESP32_WIFI_STATIC_TX_BUFFER=y
+ CONFIG_ESP32_WIFI_TX_BUFFER_TYPE=0
+-CONFIG_ESP32_WIFI_STATIC_TX_BUFFER_NUM=10
++CONFIG_ESP32_WIFI_STATIC_TX_BUFFER_NUM=6
+ CONFIG_ESP32_WIFI_CSI_ENABLED=
+ CONFIG_ESP32_WIFI_AMPDU_TX_ENABLED=y
+ CONFIG_ESP32_WIFI_TX_BA_WIN=6
+ CONFIG_ESP32_WIFI_AMPDU_RX_ENABLED=y
+-CONFIG_ESP32_WIFI_RX_BA_WIN=12
++CONFIG_ESP32_WIFI_RX_BA_WIN=16
+ CONFIG_ESP32_WIFI_NVS_ENABLED=y
+ CONFIG_ESP32_WIFI_TASK_PINNED_TO_CORE_0=y
+ CONFIG_ESP32_WIFI_TASK_PINNED_TO_CORE_1=
