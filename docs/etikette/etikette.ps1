@@ -154,3 +154,92 @@ for ($k = 0; $k -lt $labels.Count; $k++) {
 $g.Dispose()
 $pv.Save((Join-Path $dir 'vorschau.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 foreach ($l in $labels) { $l[0..($l.Count - 2)] }
+
+# ---------------------------------------------------------------------------
+# P-touch-Editor-Dateien (.lbt) mit den Bildern in fester Groesse.
+# Beim Bild-Import streckt der Editor das Bild; hier stehen die Masse fest.
+# Massstab und Positionen stammen aus der von Hand eingerichteten Datei
+# Ettikette-PinOut-ESP32-WROVER.lbt (Druck passt auf die Stiftleiste):
+# 342 Bildpunkte = 72.9752 Editor-Einheiten breit, 32 Bildpunkte = 5.54218 hoch.
+# Format (aus Dateien des Editors gelesen): "PLL" 02, u16 16, u32 Textlaenge,
+# 6 Nullbytes, Einstellungen als UTF-16LE-Text mit BOM, dann je Bild:
+# "PLI" 00, u16 Kopflaenge, u16 28, u32 PNG-Laenge, u32 0, u32 Breite,
+# u32 Hoehe, u32 24, Bildname UTF-16 mit Null, PNG-Daten.
+# Band wie in den eigenen Dateien: PT-P700, TapeWidth 259.
+
+function D([long]$bits) { [BitConverter]::Int64BitsToDouble($bits) }   # Wert bitgenau wie im Editor
+
+function Format-PtDouble([double]$v) {
+    $bits = [BitConverter]::DoubleToInt64Bits($v)
+    $sign = ($bits -shr 63) -band 1
+    $exp  = ($bits -shr 52) -band 0x7FF
+    $mant = $bits -band 0xFFFFFFFFFFFFF
+    '{0}({1}.{2:x3}.{3:x13})' -f $v.ToString('G6', [Globalization.CultureInfo]::InvariantCulture), $sign, $exp, $mant
+}
+
+$x0     = D 0x40384CCCCCCCCCCD   # 24.3     linker Rand
+$areaY  = D 0x3FEF9BE02468ACF0   # 0.987778 oberer Rand
+$areaH  = D 0x4025BB2A1907F6E6   # 10.8656  Hoehe Bearbeitungsbereich
+$tapeW  = D 0x4027B4E81B4E81B5   # 11.8533  Bandbreite
+$unitX  = (D 0x40523E6911111114) / 342   # Editor-Einheiten pro Bildpunkt (Breite)
+$imgH   = D 0x40162B30F6E0B89E   # 5.54218  Bildhoehe (32 Punkte)
+
+# $tapeLength: '1,<wert>' = automatisch, '2,<wert>' = fest
+# $images: je Bild Path, Width, Height, Rect (x, y, w, h als double)
+function New-Lbt($path, $images, $tapeLength, [double]$editW) {
+    $d = { param($v) Format-PtDouble $v }
+    $t = New-Object System.Text.StringBuilder
+    $lines = @(
+        '[Propaty]', 'Version=1.00', 'DoubleFormat=IEEE754(1.11.52)', 'DeviceName=Brother PT-P700',
+        'SeriesCode=0', 'ModelCode=g',
+        "TapeLength=$tapeLength",
+        "TapeWidth=259,$(& $d $tapeW)",
+        'TapeMargin=2', 'TapeDirect=1', 'FitPrintArea=1', 'InkColor=0', 'PaperColor=16777215',
+        "EditMargin=$(& $d $x0),$(& $d $areaY),$(& $d $editW),$(& $d $areaH)",
+        'MultiObjectMode=1', "ObjectCount=$($images.Count)"
+    )
+    foreach ($l in $lines) { [void]$t.Append("$l`r`n") }
+    $names = @()
+    foreach ($img in $images) {
+        $name = ('{0:x16}.png' -f [BitConverter]::ToInt64([Guid]::NewGuid().ToByteArray(), 0)).Substring(0, 20)
+        $names += $name
+        $rect = ($img.Rect | ForEach-Object { & $d $_ }) -join ','
+        [void]$t.Append("`r`n[Block]`r`nType=Image`r`nRect=$rect`r`nAspect=$(& $d ($img.Width / $img.Height))`r`n")
+        [void]$t.Append("Paragraph=0`r`nParagraphRect=$rect`r`nDirect=1`r`nRotate=0`r`nCenterRect=$rect`r`nImageName=$name`r`n")
+    }
+    [byte[]]$text = [byte[]](0xFF, 0xFE) + [Text.Encoding]::Unicode.GetBytes($t.ToString())
+
+    $ms = New-Object System.IO.MemoryStream
+    $bw = New-Object System.IO.BinaryWriter $ms
+    $bw.Write([byte[]][char[]]'PLL'); $bw.Write([byte]2); $bw.Write([uint16]16)
+    $bw.Write([uint32]$text.Length); $bw.Write([byte[]]::new(6)); $bw.Write($text)
+    for ($k = 0; $k -lt $images.Count; $k++) {
+        $png = [IO.File]::ReadAllBytes($images[$k].Path)
+        $nameBytes = [Text.Encoding]::Unicode.GetBytes($names[$k] + [char]0)
+        $bw.Write([byte[]][char[]]'PLI'); $bw.Write([byte]0)
+        $bw.Write([uint16](28 + $nameBytes.Length)); $bw.Write([uint16]28)
+        $bw.Write([uint32]$png.Length); $bw.Write([uint32]0)
+        $bw.Write([uint32]$images[$k].Width); $bw.Write([uint32]$images[$k].Height); $bw.Write([uint32]24)
+        $bw.Write($nameBytes); $bw.Write($png)
+    }
+    $bw.Flush()
+    [IO.File]::WriteAllBytes($path, $ms.ToArray())
+    "{0}: {1} Bild(er), TapeLength {2}" -f (Split-Path $path -Leaf), $images.Count, $tapeLength
+}
+
+function Get-ImgInfo($bmpResult, $file, $rect) {
+    $bm = $bmpResult[-1]
+    [pscustomobject]@{ Path = (Join-Path $dir $file); Width = $bm.Width; Height = $bm.Height; Rect = $rect }
+}
+
+# WROVER: Masse 1:1 aus der Referenzdatei, nur die Bilder sind neu
+New-Lbt (Join-Path $dir 'Pinout-ESP32-WROVER.lbt') @(
+    (Get-ImgInfo $a 'etikette_links.png'  @($x0, $areaY, (D 0x40523E6911111114), $imgH)),
+    (Get-ImgInfo $b 'etikette_rechts.png' @($x0, (D 0x401A90E6E8B49B77), (D 0x40523EAB33333333), (D 0x4026647F6E5D4C3C)))
+) '2,101(0.405.9400000000000)' (D 0x40532CCCCCCCCCCD)
+
+# MAX98357A: gleicher Massstab wie die obere WROVER-Etikette
+$wMax = $c[-1].Width * $unitX
+New-Lbt (Join-Path $dir 'Pinout-MAX98357A.lbt') @(
+    (Get-ImgInfo $c 'etikette_max98357a.png' @($x0, $areaY, $wMax, $imgH))
+) "1,$(Format-PtDouble ($x0 + $wMax))" $wMax
