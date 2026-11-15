@@ -1,19 +1,20 @@
 # Versionen und Branches – Übersicht
 
-Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 10.11.2026.
+Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 15.11.2026.
 
-> **Auf dem Radio läuft: `firmware-ng-bt-v3`** (Code aus Commit `6bc741d`, Build `0e9ef99`, geflasht 09.11.2026, getestet: alles ok). Das ist v2 plus die Korrektur [„Umschalten nur bei hörbarem Ton“](#änderung-nach-v2-umschalten-nur-bei-hörbarem-ton).
-> Letzte gesicherte Version davor: Tag `firmware-ng-bt-v2`, mit [bekanntem Fehler](#bekannter-fehler-in-v2-radio-setzt-immer-wieder-ca-30-s-aus) (Radio setzt nach Bluetooth-Betrieb immer wieder ca. 30 s aus).
+> **Auf dem Radio läuft: `firmware-ng-bt-v4`** (Code aus Commit `c5bbc33`, Build `6acdb1e`, geflasht 15.11.2026 an COM10, getestet: alles ok). Das ist v3 im fertig eingebauten Gerät plus [Taste 3 an GPIO 32 und ruhiges Lautstärke-Poti](#änderungen-in-v4-taste-3-an-gpio-32-ruhiges-lautstärke-poti).
+> Version davor: Tag `firmware-ng-bt-v3` (gleiche Bluetooth-Funktion; Achtung: Konfiguration im Tag hat Taste 3 noch an GPIO 27, der am heutigen Board defekt ist).
 
 ## Kurzfassung
 
 | Name | Art | Inhalt | Zustand |
 |---|---|---|---|
-| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | Stand = v3 |
+| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | Stand = v4 |
 | `firmware-ng-v1` | Tag + Release | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig; fertige `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern**, getestet 06.11.2026 |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
 | `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
-| `firmware-ng-bt-v3` | Tag | **v3** = v2 + Korrektur „Umschalten nur bei hörbarem Ton“; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 09.11.2026 |
+| `firmware-ng-bt-v3` | Tag | **v3** = v2 + Korrektur „Umschalten nur bei hörbarem Ton“; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 09.11.2026 |
+| `firmware-ng-bt-v4` | Tag | **v4** = v3 + Taste 3 an GPIO 32 (GPIO 27 defekt) + geglättetes Lautstärke-Poti; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 15.11.2026 im eingebauten Gerät |
 | `archiv/promini-ir-uart` | Tag | frühere Lösung: Arduino Pro Mini sendet IR-Codes bzw. UART-Befehle (Dateien heute in `archiv/`) | nicht mehr in Gebrauch |
 | `archiv/s3-usbhost` | Tag | frühere Lösung mit **zwei Boards**: ESP32-S3 liest Tasten + Poti und schickt Befehle per USB an den WROVER (Dateien heute in `archiv/`) | funktionierte, nicht mehr in Gebrauch |
 
@@ -44,9 +45,13 @@ Genauso, nur mit `git switch --detach firmware-ng-bt-v2`. Konfiguration: 6 Sende
 
 ### `firmware-ng-bt-v3` (Bluetooth immer an, nur bei hörbarem Ton)
 
-Genauso, mit `git switch --detach firmware-ng-bt-v3`. Konfiguration wie v2. Am 09.11.2026 mit `-OhneKonfig` geflasht (nur Firmware, Konfiguration auf dem Radio unverändert).
+Genauso, mit `git switch --detach firmware-ng-bt-v3`. Konfiguration wie v2. Am 09.11.2026 mit `-OhneKonfig` geflasht (nur Firmware, Konfiguration auf dem Radio unverändert). Am heutigen Board **nur mit `-OhneKonfig`** flashen: Die Konfiguration im Tag hat Taste 3 an GPIO 27 (defekt).
 
-Sender, WLAN-Daten und Einstellungen bleiben bei beiden erhalten. Mehr Details: `firmware/README.md`.
+### `firmware-ng-bt-v4` (läuft auf dem Radio)
+
+Genauso, mit `git switch --detach firmware-ng-bt-v4`. Konfiguration: Taste 3 an GPIO 32, VS1053-Pins `P_XCS`/`P_XDCS` = 255. Am 15.11.2026 erst mit Konfiguration, dann die Firmware mit `-OhneKonfig` geflasht.
+
+Sender, WLAN-Daten und Einstellungen bleiben bei allen erhalten. Mehr Details: `firmware/README.md`.
 
 ## Mit den Branches arbeiten (git)
 
@@ -191,6 +196,26 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 | Bluetooth am Handy ausschalten | nicht getestet |
 
 **Falls es Probleme gibt:** v2 wieder flashen (siehe [oben](#firmware-ng-bt-v2-bluetooth-immer-an)); dann gilt wieder der bekannte Fehler von v2.
+
+## Änderungen in v4: Taste 3 an GPIO 32, ruhiges Lautstärke-Poti
+
+**Stand:** Tag `firmware-ng-bt-v4`. Code aus Commit `c5bbc33`, Build `6acdb1e`. **Geflasht und getestet am 15.11.2026 im fertig eingebauten Gerät, läuft auf dem Radio.**
+
+**Taste 3 an GPIO 32:** Nach dem Einbau löste Taste 3 nie aus. GPIO 27 liegt auch ohne Draht dauernd bei ca. 1,2 V (statt 3,3 V mit internem Pull-up), vermutlich beim Löten einmal kurzgeschlossen. Taste 3 ist deshalb auf **GPIO 32** umgelötet (interner Pull-up, kein Widerstand nötig). Damit 32 frei ist, stehen `P_XCS` und `P_XDCS` auf 255: Ka-Radio32 (`VS1053_HW_init`) bricht bei `P_XCS` = 255 sofort ab und fasst keinen VS1053-Pin an. Einen VS1053 gibt es nicht.
+
+**Lautstärke-Poti:** Im Gehäuse sprang die Lautstärke ohne Drehen dauernd zwischen 71 und 74 (ca. jede Sekunde eine Meldung). Neu in `firmware/stationkeys.c`: gleitender Mittelwert über die Zeit (jeder neue Wert zählt 1/4, Takt 80 ms) und Mindeständerung `VOL_HYST` 4 statt 2.
+
+**WLAN:** Beim ersten Test fand das Radio kein WLAN, weil als SSID 1 die IP-Adresse eingetragen war. Mit richtigem Namen: Der erste Versuch beim Kaltstart scheitert wie bekannt, der zweite klappt (Signal −63 dBm), `READY` nach ca. 21 s. Die Meldung `invalid static ip` beim Verbinden ist harmlos (feste IP wird erst kurz danach gesetzt).
+
+**Test am 15.11.2026** (am Gerät):
+
+| Schritt | Ergebnis |
+|---|---|
+| Bluetooth-Ton vom Handy | ✔ |
+| WLAN verbinden, Autostart Radio | ✔ |
+| Tasten 1–6 (Taste 3 an GPIO 32) | ✔ |
+| Lautstärke-Poti 80 s nicht berührt | keine einzige Lautstärke-Meldung ✔ |
+| Lautstärke-Poti drehen | Lautstärke folgt ✔ |
 
 ## Mute über den Ein/Aus-Knopf
 
