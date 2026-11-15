@@ -16,7 +16,7 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 |---|---|---|
 | `P_KEY0` | 13 | Taste 1 (Sender 0) gegen GND |
 | `P_KEY1` | 14 | Taste 2 (Sender 1) gegen GND |
-| `P_KEY2` | 27 | Taste 3 (Sender 2) gegen GND |
+| `P_KEY2` | 32 | Taste 3 (Sender 2) gegen GND (GPIO 27 am WROVER 5C92044814 defekt; 32 frei, weil `P_XCS`/`P_XDCS` = 255: kein VS1053) |
 | `P_KEY3` | 15 | Taste 4 (Sender 3) gegen GND |
 | `P_KEY4` | 5  | Taste 5 (Sender 4) gegen GND |
 | `P_KEY5` | 2  | Taste 6 (Sender 5) gegen GND (in `firmware-ng-bt-v1`: 255, dafür `P_KEY_BT` = 2) |

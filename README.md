@@ -35,7 +35,7 @@ Warum nur ein ESP32-WROVER? Er kann **klassisches Bluetooth** (der ESP32-S3 kann
 |---|---|
 | ESP32-WROVER (ESP32-D0WD-V3, 16 MB Flash, PSRAM) | USB-Seriell-Chip CH343 |
 | Verstärker MAX98357A | LRC → GPIO 25, BCLK → GPIO 26, DIN → GPIO 22, VIN → 5 V, GND |
-| Tasten 1–6 (Rasttasten gegen GND, interner Pull-up) | GPIO 13, 14, 27, 15, 5, 2 |
+| Tasten 1–6 (Rasttasten gegen GND, interner Pull-up) | GPIO 13, 14, 32, 15, 5, 2 |
 | Lautstärke-Poti (Enden an 3,3 V / GND) | Schleifer → GPIO 39 |
 | Ein/Aus-Knopf: Poti (Mute, Drehrichtung ±10 %) | Schleifer → GPIO 36 |
 | Ein/Aus-Knopf: Schalter | Reed-Relais in der 5-V-Zuleitung (ohne Firmware) |

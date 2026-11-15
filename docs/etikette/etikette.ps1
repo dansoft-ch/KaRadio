@@ -6,7 +6,7 @@
 #
 # Reihenfolge: Pin 1 = Antennen-Ende (3V3 bzw. GND), letzter Pin = USB-Ende.
 # Belegt = schwarz hinterlegt (weisse Schrift). Kuerzel wie im Factsheet:
-#   Tst1..Tst6 = Sendertasten (GPIO 13, 14, 27, 15, 5, 2)
+#   Tst1..Tst6 = Sendertasten (GPIO 13, 14, 32, 15, 5, 2)
 #   Pvol = Lautstaerke-Poti (39), Pmte = Mute-Poti (36)
 #   LRC/BCLK/DIN = MAX98357A (25/26/22), IR = IR-Empfaenger (21), LED = Status-LED (4)
 
@@ -15,8 +15,8 @@ Add-Type -AssemblyName System.Drawing
 # Text, belegt (true = schwarz hinterlegt)
 $links = @(
     @('3V3', $false), @('EN', $false), @('Pmte', $true), @('Pvol', $true),
-    @('34', $false), @('35', $false), @('32', $false), @('33', $false),
-    @('LRC', $true), @('BCLK', $true), @('Tst3', $true), @('Tst2', $true),
+    @('34', $false), @('35', $false), @('Tst3', $true), @('33', $false),
+    @('LRC', $true), @('BCLK', $true), @('27', $false), @('Tst2', $true),
     @('12', $false), @('GND', $false), @('Tst1', $true), @('D2', $false),
     @('D3', $false), @('CMD', $false), @('5V', $false)
 )
@@ -26,6 +26,11 @@ $rechts = @(
     @('18', $false), @('Tst5', $true), @('17', $false), @('16', $false),
     @('LED', $true), @('0', $false), @('Tst6', $true), @('Tst4', $true),
     @('D1', $false), @('D0', $false), @('CLK', $false)
+)
+# Verstaerker MAX98357A (7 Pins)
+$max98357a = @(
+    @('LRC', $true), @('BCLK', $true), @('DIN', $true), @('GAIN', $false),
+    @('SD', $false), @('GND', $false), @('Vin', $false)
 )
 
 $pitch  = 18     # 2,54 mm bei 180 dpi
@@ -46,6 +51,10 @@ $font['6'] = '.####.','##..##','##....','##....','#####.','##..##','##..##','##.
 $font['7'] = '######','....##','....##','...##.','...##.','..##..','..##..','..##..','.##...','.##...','.##...'
 $font['8'] = '.####.','##..##','##..##','##..##','.####.','##..##','##..##','##..##','##..##','##..##','.####.'
 $font['9'] = '.####.','##..##','##..##','##..##','##..##','.#####','....##','....##','....##','##..##','.####.'
+$font['A'] = '.####.','##..##','##..##','##..##','##..##','######','##..##','##..##','##..##','##..##','##..##'
+$font['S'] = '.####.','##..##','##....','##....','.####.','....##','....##','....##','....##','##..##','.####.'
+$font['n'] = '......','......','......','......','#####.','##..##','##..##','##..##','##..##','##..##','##..##'
+$font['i'] = '##','##','..','##','##','##','##','##','##','##','##'
 $font['B'] = '#####.','##..##','##..##','##..##','#####.','##..##','##..##','##..##','##..##','##..##','#####.'
 $font['C'] = '.####.','##..##','##....','##....','##....','##....','##....','##....','##....','##..##','.####.'
 $font['D'] = '####..','##.##.','##..##','##..##','##..##','##..##','##..##','##..##','##..##','##.##.','####..'
@@ -59,7 +68,7 @@ $font['N'] = '##...##','##...##','###..##','####.##','##.#.##','##.####','##..##
 $font['P'] = '#####.','##..##','##..##','##..##','##..##','#####.','##....','##....','##....','##....','##....'
 $font['R'] = '#####.','##..##','##..##','##..##','##..##','#####.','####..','##.##.','##.##.','##..##','##..##'
 $font['T'] = '######','..##..','..##..','..##..','..##..','..##..','..##..','..##..','..##..','..##..','..##..'
-$font['V'] = '##..##','##..##','##..##','##..##','##..##','##..##','##..##','##..##','.####.','.####.','..##..'
+$font['V'] = '##...##','##...##','##...##','##...##','.##.##.','.##.##.','.##.##.','..###..','..###..','..###..','...#...'
 $font['X'] = '##..##','##..##','.####.','.####.','..##..','..##..','..##..','.####.','.####.','##..##','##..##'
 $font['e'] = '......','......','......','......','.####.','##..##','##..##','######','##....','##..##','.####.'
 $font['l'] = '##','##','##','##','##','##','##','##','##','##','##'
@@ -128,16 +137,20 @@ function New-Label($pins, $path) {
 $dir = $PSScriptRoot
 $a = New-Label $links  (Join-Path $dir 'etikette_links.png')
 $b = New-Label $rechts (Join-Path $dir 'etikette_rechts.png')
+$c = New-Label $max98357a (Join-Path $dir 'etikette_max98357a.png')
+$labels = @($a, $b, $c)
 
-# Vorschau: beide Etiketten 8-fach vergroessert untereinander
+# Vorschau: alle Etiketten 8-fach vergroessert untereinander
 $s = 8
-$pv = New-Object System.Drawing.Bitmap ($a[-1].Width * $s + 40), ($height * $s * 2 + 60)
+$pv = New-Object System.Drawing.Bitmap ($a[-1].Width * $s + 40), (($height * $s + 20) * $labels.Count + 20)
 $g = [System.Drawing.Graphics]::FromImage($pv)
 $g.Clear([System.Drawing.Color]::LightGray)
 $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
 $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
-$g.DrawImage($a[-1], 20, 20, $a[-1].Width * $s, $height * $s)
-$g.DrawImage($b[-1], 20, 40 + $height * $s, $b[-1].Width * $s, $height * $s)
+for ($k = 0; $k -lt $labels.Count; $k++) {
+    $l = $labels[$k][-1]
+    $g.DrawImage($l, 20, 20 + $k * ($height * $s + 20), $l.Width * $s, $height * $s)
+}
 $g.Dispose()
 $pv.Save((Join-Path $dir 'vorschau.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-$a[0..($a.Count - 2)]; $b[0..($b.Count - 2)]
+foreach ($l in $labels) { $l[0..($l.Count - 2)] }
