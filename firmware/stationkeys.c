@@ -54,7 +54,10 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
 #define ADC_LOW        80      // Totzone unten (ESP32-ADC misst unter ~0,1 V nichts)
 #define ADC_HIGH       3900    // Totzone oben (ab ~3,1 V gesättigt)
 #define VOL_MAX        254
-#define VOL_HYST       2       // Mindeständerung, bevor neu gesetzt wird
+#define VOL_HYST       4       // Mindeständerung, bevor neu gesetzt wird (2 war zu knapp:
+                               // im Gehäuse zappelte der Wert 71 <-> 74)
+#define POT_SMOOTH     4       // Glättung über die Zeit: jeder neue Wert zählt 1/4
+                               // (bei 80 ms Takt folgt das Poti in ~0,3 s)
 #define VOL_FORCE_MS   60000   // so lange nach dem Start gewinnt das Poti immer
 #define MUTE_STEP      410     // ca. 10 % von 4095 (5 % war zu empfindlich)
 
@@ -112,7 +115,14 @@ static int readAdc(adc1_channel_t chan)
 
 static int readPot(void)
 {
-	int raw = readAdc(potChan);
+	// Gleitender Mittelwert über die Zeit (x16 skaliert, damit nichts verloren geht).
+	// Die 16 Messungen in readAdc liegen innerhalb ~1 ms und fangen langsame
+	// Störungen (WLAN-/BT-Sendepulse auf langen Leitungen) nicht ab.
+	static int filt = -1;
+	int now = readAdc(potChan) * 16;
+	if (filt < 0) filt = now;
+	else filt += (now - filt) / POT_SMOOTH;
+	int raw = filt / 16;
 	if (raw < ADC_LOW) raw = ADC_LOW;
 	if (raw > ADC_HIGH) raw = ADC_HIGH;
 	return (raw - ADC_LOW) * VOL_MAX / (ADC_HIGH - ADC_LOW);
