@@ -24,7 +24,7 @@ KaRadio32 selbst liest Tasten und Poti (`firmware/`, Anleitung in `firmware/READ
 
 ## Senderliste
 
-Aktuell `sender/WebStations_Daniel_schnell.txt` (16.11.2026): Streams direkt und über HTTP eingetragen (HTTPS kostet am ESP32 ~1,5 s, `.m3u` ~1,3 s). Messwerte in `sender/README.md`. Testboard 5C92044868 (COM4) läuft seit 16.11.2026 mit Firmware-Build `2473610` und dieser Liste.
+Aktuell `sender/WebStations_Daniel_schnell.txt` (16.11.2026): Streams direkt und über HTTP eingetragen (HTTPS kostet am ESP32 ~1,5 s, `.m3u` ~1,3 s). Messwerte in `sender/README.md`. Testboard 5C92044868 (COM4) läuft seit 16.11.2026 mit Firmware-Build `2473610` und dieser Liste. Stream-Stopp nach 1 h Mute dort getestet (ok); Lautstärke-Poti hebt Mute bewusst nicht auf (Entscheid 16.11.2026, erst Praxis beobachten). Auf dem Radio (COM10) läuft noch v4.
 
 ## Hardware (ESP32-WROVER)
 - Pins stehen in `firmware/standard_psram_dan_keys.csv` (Tasten GPIO 13, 14, 32, 15, 5, 2; Lautstärke-Poti GPIO 39; Mute-Poti GPIO 36; IR GPIO 21).

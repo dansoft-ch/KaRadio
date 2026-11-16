@@ -1,6 +1,6 @@
 # Versionen und Branches – Übersicht
 
-Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 15.11.2026.
+Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 16.11.2026.
 
 > **Auf dem Radio läuft: `firmware-ng-bt-v4`** (Code aus Commit `c5bbc33`, Build `6acdb1e`, geflasht 15.11.2026 an COM10, getestet: alles ok). Das ist v3 im fertig eingebauten Gerät plus [Taste 3 an GPIO 32 und ruhiges Lautstärke-Poti](#änderungen-in-v4-taste-3-an-gpio-32-ruhiges-lautstärke-poti).
 > Version davor: Tag `firmware-ng-bt-v3` (gleiche Bluetooth-Funktion; Achtung: Konfiguration im Tag hat Taste 3 noch an GPIO 27, der am heutigen Board defekt ist).
@@ -9,7 +9,7 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 
 | Name | Art | Inhalt | Zustand |
 |---|---|---|---|
-| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | v4 + Stream-Stopp nach 1 h Mute (16.11.2026, noch nicht gebaut/getestet) |
+| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | v4 + [Stream-Stopp nach 1 h Mute](#nach-v4-stream-stopp-nach-1-h-mute) (Code `2473610`, Build `f014d90`, am 16.11.2026 auf dem Testboard getestet, noch nicht auf dem Radio) |
 | `firmware-ng-v1` | Tag + Release | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig; fertige `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern**, getestet 06.11.2026 |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
 | `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
@@ -217,6 +217,30 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 | Lautstärke-Poti 80 s nicht berührt | keine einzige Lautstärke-Meldung ✔ |
 | Lautstärke-Poti drehen | Lautstärke folgt ✔ |
 
+## Nach v4: Stream-Stopp nach 1 h Mute
+
+**Stand:** `main`, Code aus Commit `2473610`, Build `f014d90`. **Am 16.11.2026 auf dem Testboard getestet** (altes Board 5C92044868 an COM4). Auf dem Radio läuft noch v4; noch kein Tag.
+
+**Warum:** Mute setzt nur den Ton auf 0, der Stream läuft weiter (~1,4 GB pro Tag).
+
+**Was es tut:** Nach 1 h Mute stoppt die Firmware den Stream (`MUTE_STOP_MS` in `firmware/stationkeys.c`). Mute aus spielt den Sender wieder. WLAN und Bluetooth bleiben an. Startet jemand das Radio während des Mutes (Sendertaste, Weboberfläche, Handy getrennt), zählt die Stunde neu.
+
+**Entschieden am 16.11.2026:** Das Lautstärke-Poti hebt Mute **nicht** auf. Die Stellung des Ein/Aus-Knopfs soll zeigen, ob das Radio stumm ist; ausserdem liesse sich Mute am Anschlag des Knopfs nicht wieder einschalten. Erst im Alltag beobachten.
+
+**Test am 16.11.2026** (Testboard, neo 1, serielles Protokoll):
+
+| Zeit | Ereignis |
+|---|---|
+| 09:49:19 | neo 1 spielt |
+| 09:49:59 | `stationkeys: Mute an`, Stream läuft weiter |
+| 10:49:59 | `stationkeys: 1 h Mute -> Stream gestoppt` ✔ |
+| 10:52:47 | `stationkeys: Mute aus`, `Stream wieder an` |
+| 10:52:49 | `##CLI.PLAYING#`, Musik wieder da (2 s) ✔ |
+
+## Senderliste mit kurzen Startzeiten
+
+Seit 16.11.2026 `sender/WebStations_Daniel_schnell.txt` (Laden im Webinterface über **Load**). SRF ohne `.m3u`-Playlist, neo 1 und Rockantenne über HTTP statt HTTPS. Startzeit aller 6 Sender 1,2–2,8 s statt bis 5,7 s. Details und Messwerte: `sender/README.md`.
+
 ## Mute über den Ein/Aus-Knopf
 
 Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter** steuert ein Reed-Relais (hartes Ein/Aus, keine Firmware). Der **Schleifer des Potis** geht an **GPIO 36** (Eintrag `P_MUTE_POT`, Poti-Enden an 3,3 V und GND) und steuert **Mute**:
@@ -224,7 +248,8 @@ Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter*
 - Knopf um ca. 10 % **aufdrehen** (Spannung steigt) → Mute aus.
 - Knopf um ca. 10 % **zudrehen** (Spannung sinkt) → Mute an.
 - Es zählt die **Drehrichtung**, nicht die Stellung. Nach dem Einschalten ist Mute aus.
-- Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt.
+- Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt und hebt Mute nicht auf.
+- Nach 1 h Mute stoppt der Stream, Mute aus spielt den Sender wieder (seit `2473610`).
 - GPIO 36 hat keinen eingebauten Pull-up: **100 kΩ von GPIO 36 nach 3,3 V** fest einlöten. Seit 07.11.2026 ist ein Poti angeschlossen und `P_MUTE_POT` = 36 (getestet). Mit angeschlossenem Poti braucht es den Widerstand nicht; er verhindert nur, dass ein offener Pin von selbst Mute auslöst.
 
 ## Wichtig beim Wechsel zwischen v1 und Bluetooth-Versionen
