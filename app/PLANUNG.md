@@ -15,10 +15,10 @@ Empfehlung: **A**, zuerst nur Android (APK direkt installieren, kein Play Store 
 
 | Schritt | Inhalt | Aufwand |
 |---|---|---|
-| 1. Prototyp | Design, Tasten, Lautstärke, Stumm, Menü mit Adresse | **erledigt** (`beispiel/`) |
+| 1. Prototyp | Design, Tasten, Lautstärke, Stumm, Menü mit Adresse | **erledigt** (heute `www/`) |
 | 2. Design nach dem Biennophone „Crans“ | Holz, Webstoff, Schild-Schrift, Tasten, Chromknöpfe, Kontrolllampe, Standardadresse `karadio32.local` | **erledigt** (16.11.2026) |
-| 3. Capacitor-Projekt | `package.json`, Capacitor-Konfiguration, natives HTTP, App-Icon, Name „Biennophone“ | 1 Sitzung |
-| 4. Build per GitHub Actions | Workflow `app.yml` baut die APK (Node + Android SDK im Runner), legt sie unter `app/bin/` ab bzw. als Release | 1 Sitzung, evtl. 1–2 Fehlerrunden |
+| 3. Capacitor-Projekt | `package.json`, Capacitor-Konfiguration, natives HTTP, App-Icon, Name „Biennophone“ | **erledigt** (16.11.2026) |
+| 4. Build per GitHub Actions | Workflow `app.yml` baut die APK (Node + Android SDK im Runner), legt sie unter `app/bin/` ab bzw. als Release | **eingerichtet** (16.11.2026), erster Lauf noch offen |
 | 5. Test am Handy | APK installieren, mit dem Radio testen, Fehler beheben | 1 Sitzung zusammen mit dir |
 | optional | Firmware: `?mute=`, Bluetooth-Anzeige in `?infos`, CORS-Kopfzeile | je 1 kurze Sitzung + Flashen |
 | optional | Radio im WLAN suchen statt IP eintippen, Home-Screen-Widget | je 1 Sitzung |
@@ -27,6 +27,6 @@ Insgesamt etwa **3–5 Arbeitssitzungen** bis zur installierbaren Android-App. D
 
 ## Offene Fragen
 
-- Android oder iPhone?
+- Android oder iPhone? → **Android** (Entscheid 16.11.2026)
 - Mute: App-seitig (Lautstärke 0) reicht, oder Firmware-Befehl `?mute=` (dann stimmen App und Mute-Poti überein)?
 - Funktioniert `karadio32.local` am eigenen Handy?

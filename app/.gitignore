@@ -1,0 +1,5 @@
+# wird beim Build in GitHub Actions erzeugt
+node_modules/
+android/
+www/fonts/
+package-lock.json

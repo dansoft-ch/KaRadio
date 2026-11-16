@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- App-Symbol: Notenschlüssel wie auf der Messingplatte des Biennophone "Crans" -->
+  <defs>
+    <linearGradient id="messing" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6e1d0"/><stop offset=".55" stop-color="#d3ccb6"/><stop offset="1" stop-color="#b4ab90"/>
+    </linearGradient>
+    <linearGradient id="glanz" x1="0" y1="0" x2="1" y2="0">
+      <stop offset=".25" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity=".28"/><stop offset=".62" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="buerste" width="512" height="4" patternUnits="userSpaceOnUse">
+      <rect width="512" height="1.2" fill="#fff" opacity=".10"/><rect y="2" width="512" height="1" fill="#000" opacity=".035"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#messing)"/>
+  <rect width="512" height="512" rx="96" fill="url(#buerste)"/>
+  <rect width="512" height="512" rx="96" fill="url(#glanz)"/>
+  <rect x="6" y="6" width="500" height="500" rx="90" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="3"/>
+
+  <!-- Notenschlüssel, rostrot, als Linienzug -->
+  <g fill="none" stroke="#a5442a" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="22" d="M272 418 L262 112"/>
+    <path stroke-width="20" d="M262 112 C258 64 312 50 312 104 C312 158 196 192 196 278 C196 338 252 362 292 342 C338 320 326 248 270 250 C232 252 222 296 254 310"/>
+    <path stroke-width="20" d="M272 418 C276 462 214 462 214 428"/>
+  </g>
+  <circle cx="222" cy="424" r="22" fill="#a5442a"/>
+</svg>

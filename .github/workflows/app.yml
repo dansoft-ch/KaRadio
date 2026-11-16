@@ -1,0 +1,113 @@
+# Baut die Handy-App "Biennophone" (app/) als Android-APK mit Capacitor.
+# Ergebnis: app/bin/Biennophone.apk (Bot-Commit, nach "git pull" lokal) und Artefakt.
+# Auf dem PC muss nichts installiert sein (kein Node, kein Java, kein Android Studio).
+name: App
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "app/**"
+      - "!app/bin/**"
+      - "!app/**.md"
+      - ".github/workflows/app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Abhängigkeiten holen
+        run: npm install --no-audit --no-fund
+
+      - name: Schriften in die App legen (ohne Internet nutzbar)
+        run: |
+          mkdir -p www/fonts
+          cp node_modules/@fontsource/jost/files/jost-latin-{400,500,600,700}-normal.woff2 www/fonts/
+          cp node_modules/@fontsource/jost/files/jost-latin-400-italic.woff2 www/fonts/
+          cp node_modules/@fontsource/damion/files/damion-latin-400-normal.woff2 www/fonts/
+          ls -l www/fonts
+
+      - name: Android-Projekt erzeugen
+        run: |
+          npx cap add android
+          M=android/app/src/main/AndroidManifest.xml
+          # HTTP ohne S zum Radio erlauben (KaRadio kann kein HTTPS)
+          perl -0pi -e 's/<application\b/<application android:usesCleartextTraffic="true"/' "$M"
+          grep -q usesCleartextTraffic "$M"
+          # Versionsnummer = Build-Nummer, damit Updates installierbar sind
+          perl -pi -e 's/versionCode \d+/versionCode ${{ github.run_number }}/; s/versionName "[^"]*"/versionName "1.0.${{ github.run_number }}"/' android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: App-Symbol setzen
+        run: |
+          command -v convert || { sudo apt-get update -q && sudo apt-get install -y -q imagemagick; }
+          R=android/app/src/main/res
+          rm -rf "$R/mipmap-anydpi-v26"
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            n=${d%%:*}; s=${d##*:}
+            mkdir -p "$R/mipmap-$n"
+            convert -background none -density 300 icon.svg -resize ${s}x${s} "$R/mipmap-$n/ic_launcher.png"
+            cp "$R/mipmap-$n/ic_launcher.png" "$R/mipmap-$n/ic_launcher_round.png"
+            rm -f "$R/mipmap-$n/ic_launcher_foreground.png"
+          done
+
+      - name: Web-Dateien übernehmen
+        run: npx cap sync android
+
+      - name: APK bauen
+        working-directory: app/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      # Eigener Schlüssel, damit neue Versionen sich über die alte installieren lassen.
+      # Er wird beim ersten Build erzeugt und in app/signing/ abgelegt.
+      - name: Signieren
+        run: |
+          KS=signing/biennophone.keystore
+          if [ ! -f "$KS" ]; then
+            mkdir -p signing
+            keytool -genkeypair -keystore "$KS" -storepass biennophone -keypass biennophone \
+              -alias biennophone -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Biennophone"
+          fi
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          mkdir -p bin
+          "$BT/zipalign" -f -p 4 android/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/aligned.apk
+          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:biennophone --key-pass pass:biennophone \
+            --ks-key-alias biennophone --out bin/Biennophone.apk /tmp/aligned.apk
+          "$BT/apksigner" verify bin/Biennophone.apk
+          ls -l bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: biennophone-apk
+          path: app/bin/Biennophone.apk
+
+      # Commits mit GITHUB_TOKEN starten keinen neuen Build.
+      - name: APK in den Branch legen
+        if: github.ref_type == 'branch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898729+github-actions[bot]@users.noreply.github.com"
+          git add bin signing
+          git commit -m "App-Build fuer ${GITHUB_SHA::7} (automatisch)" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"

@@ -1,0 +1,15 @@
+{
+  "name": "biennophone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Handy-App zum Steuern des Biennophone-Radios (KaRadio32) über das Webinterface",
+  "dependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/core": "6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.1.2",
+    "@fontsource/damion": "^5.0.0",
+    "@fontsource/jost": "^5.0.0"
+  }
+}
