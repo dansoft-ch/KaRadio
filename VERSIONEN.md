@@ -9,12 +9,13 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 
 | Name | Art | Inhalt | Zustand |
 |---|---|---|---|
-| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | v4 + [Stream-Stopp nach 1 h Mute](#nach-v4-stream-stopp-nach-1-h-mute) (Code `2473610`, Build `f014d90`, am 16.11.2026 auf dem Testboard getestet, noch nicht auf dem Radio) |
+| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | = `firmware-ng-bt-v5` (16.11.2026) |
 | `firmware-ng-v1` | Tag + Release | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig; fertige `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern**, getestet 06.11.2026 |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
 | `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
 | `firmware-ng-bt-v3` | Tag | **v3** = v2 + Korrektur „Umschalten nur bei hörbarem Ton“; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 09.11.2026 |
 | `firmware-ng-bt-v4` | Tag | **v4** = v3 + Taste 3 an GPIO 32 (GPIO 27 defekt) + geglättetes Lautstärke-Poti; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 15.11.2026 im eingebauten Gerät |
+| `firmware-ng-bt-v5` | Tag | **v5** = v4 + [Stream-Stopp nach 1 h Mute](#änderungen-in-v5-stream-stopp-nach-1-h-mute); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 16.11.2026 auf dem Testboard (5C92044868), noch nicht auf dem Radio |
 | `archiv/promini-ir-uart` | Tag | frühere Lösung: Arduino Pro Mini sendet IR-Codes bzw. UART-Befehle (Dateien heute in `archiv/`) | nicht mehr in Gebrauch |
 | `archiv/s3-usbhost` | Tag | frühere Lösung mit **zwei Boards**: ESP32-S3 liest Tasten + Poti und schickt Befehle per USB an den WROVER (Dateien heute in `archiv/`) | funktionierte, nicht mehr in Gebrauch |
 
@@ -50,6 +51,10 @@ Genauso, mit `git switch --detach firmware-ng-bt-v3`. Konfiguration wie v2. Am 0
 ### `firmware-ng-bt-v4` (läuft auf dem Radio)
 
 Genauso, mit `git switch --detach firmware-ng-bt-v4`. Konfiguration: Taste 3 an GPIO 32, VS1053-Pins `P_XCS`/`P_XDCS` = 255. Am 15.11.2026 erst mit Konfiguration, dann die Firmware mit `-OhneKonfig` geflasht.
+
+### `firmware-ng-bt-v5` (Stream-Stopp nach 1 h Mute)
+
+Genauso, mit `git switch --detach firmware-ng-bt-v5`. Konfiguration wie v4. Auf das eingebaute Radio genügt `-OhneKonfig`.
 
 Sender, WLAN-Daten und Einstellungen bleiben bei allen erhalten. Mehr Details: `firmware/README.md`.
 
@@ -217,9 +222,9 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 | Lautstärke-Poti 80 s nicht berührt | keine einzige Lautstärke-Meldung ✔ |
 | Lautstärke-Poti drehen | Lautstärke folgt ✔ |
 
-## Nach v4: Stream-Stopp nach 1 h Mute
+## Änderungen in v5: Stream-Stopp nach 1 h Mute
 
-**Stand:** `main`, Code aus Commit `2473610`, Build `f014d90`. **Am 16.11.2026 auf dem Testboard getestet** (altes Board 5C92044868 an COM4). Auf dem Radio läuft noch v4; noch kein Tag.
+**Stand:** Tag `firmware-ng-bt-v5`. Code aus Commit `2473610`. **Am 16.11.2026 auf dem Testboard getestet** (altes Board 5C92044868 an COM4, Build `f014d90`). Die `.bin` im Tag stammt aus Build `41700c7`: gleicher Quellcode, nur Build-Zeit und Prüfsumme anders. Auf dem Radio läuft noch v4.
 
 **Warum:** Mute setzt nur den Ton auf 0, der Stream läuft weiter (~1,4 GB pro Tag).
 
@@ -249,7 +254,7 @@ Der originale Ein/Aus-Knopf des Biennophone hat Schalter + Poti. Der **Schalter*
 - Knopf um ca. 10 % **zudrehen** (Spannung sinkt) → Mute an.
 - Es zählt die **Drehrichtung**, nicht die Stellung. Nach dem Einschalten ist Mute aus.
 - Mute wirkt beim Radio und bei Bluetooth. Das Lautstärke-Poti (GPIO 39) bleibt davon getrennt und hebt Mute nicht auf.
-- Nach 1 h Mute stoppt der Stream, Mute aus spielt den Sender wieder (seit `2473610`).
+- Nach 1 h Mute stoppt der Stream, Mute aus spielt den Sender wieder (ab v5).
 - GPIO 36 hat keinen eingebauten Pull-up: **100 kΩ von GPIO 36 nach 3,3 V** fest einlöten. Seit 07.11.2026 ist ein Poti angeschlossen und `P_MUTE_POT` = 36 (getestet). Mit angeschlossenem Poti braucht es den Widerstand nicht; er verhindert nur, dass ein offener Pin von selbst Mute auslöst.
 
 ## Wichtig beim Wechsel zwischen v1 und Bluetooth-Versionen
