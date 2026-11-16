@@ -37,6 +37,7 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 - **WLAN beim Start**: Der erste Versuch scheitert beim Kaltstart oft. Die Firmware versucht dasselbe WLAN bis zu 3-mal, startet dann einmal neu und geht erst danach in den AP-Modus „WifiKaRadio“.
 - **Mute-Poti** (`P_MUTE_POT`, GPIO 36): Schleifer des originalen Ein/Aus-Knopfs. Es zählt die Drehrichtung: ca. 10 % aufdrehen → Mute aus, ca. 10 % zudrehen → Mute an (5 % war zu empfindlich). Nach dem Einschalten ist Mute aus.
   - Seit 07.11.2026 eingeschaltet (`P_MUTE_POT` = 36, Poti angeschlossen, getestet).
+  - **Stream-Stopp nach 1 h Mute** (seit 16.11.2026): Mute setzt nur den Ton auf 0, der Stream läuft weiter (~1,4 GB pro Tag). Nach 1 h Mute stoppt die Firmware den Stream. Mute aus spielt den Sender wieder (1–2 s). WLAN und Bluetooth bleiben an. Wird das Radio während des Mutes wieder gestartet (Sendertaste, Weboberfläche, Handy getrennt), zählt die Stunde neu. Dauer: `MUTE_STOP_MS` in `stationkeys.c`.
   - GPIO 36 hat **keinen eingebauten Pull-up** (gilt für GPIO 34–39). Damit ein fehlendes Mute-Poti nichts auslöst, einen **Widerstand 100 kΩ von GPIO 36 nach 3,3 V** fest einlöten, oder `P_MUTE_POT` auf `255` setzen. Bei GPIO 32/33 schaltet die Firmware den internen Pull-up selbst ein.
 - **Start-Wächter**: Der Hardware-Watchdog des ESP32 (RTC-Watchdog) läuft ab dem Bootloader mit. Erreicht KaRadio nicht innerhalb von **90 s** `READY`, startet der Chip komplett neu. Nach `READY` wird er abgeschaltet (Meldung `Start-Waechter aus (Neustart-Grund beim Start: n)`; n = 1 normales Einschalten, 3 Neustart per Software, 4 Absturz, 7 Start-Wächter/Watchdog, 9 Unterspannung/Brownout). Abstürze (Guru Meditation) führen wie bisher zum Neustart. Nicht abgedeckt: Der Chip startet gar nicht (kein Text im seriellen Monitor). Das ist ein Hardware-Thema, meist zu kurze Reset-Verzögerung am EN-Pin beim Einschalten; Abhilfe ist ein grösserer Kondensator (1–10 µF) von EN nach GND.
 - Läuft kein WLAN-Router, wartet KaRadio beim Start auf das WLAN (bzw. geht in den AP-Modus). Erst danach sind Tasten, Poti und Bluetooth aktiv.
@@ -99,4 +100,6 @@ btspeaker: Bluetooth-Ton an (intern frei …)
 btspeaker: Handy pausiert
 btspeaker: zurueck zum Radio (intern frei …)          (Trennen oder Sendertaste)
 stationkeys: Mute an / Mute aus                       (Ein/Aus-Knopf gedreht, falls P_MUTE_POT gesetzt)
+stationkeys: 1 h Mute -> Stream gestoppt
+stationkeys: Stream wieder an                         (Mute aus nach dem Stopp)
 ```

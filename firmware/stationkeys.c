@@ -11,6 +11,8 @@
  *   Handy und spielt wieder Radio.
  * - Mute-Poti (Schleifer des Ein/Aus-Knopfs): es zählt die Drehrichtung.
  *   Um MUTE_STEP aufgedreht -> Mute aus, um MUTE_STEP zugedreht -> Mute an.
+ * - Nach 1 h Mute wird der Radio-Stream gestoppt (spart Daten und etwas Strom),
+ *   Mute aus spielt den Sender wieder. WLAN und Bluetooth bleiben an.
  *
  * Konfiguration in der Hardware-Partition (gpio_space), z. B. in der .csv:
  *   P_KEY0 .. P_KEY5   GPIO des Tasters für Sender 0..5 (Taster gegen GND,
@@ -37,6 +39,7 @@
 #include "webserver.h"
 #include "webclient.h"
 #include "audio_renderer.h"
+#include "audio_player.h"
 #include "btspeaker.h"
 #include "stationkeys.h"
 
@@ -45,6 +48,7 @@
 extern const char hardware[];   // aus gpio.c
 extern const char gpio_space[];
 extern void playStation(char* id); // aus webserver.c, steht in keinem Header
+extern player_t* player_config;    // aus app_main
 
 #define NB_KEYS        6
 #define LOOP_MS        10      // Abfrage-Takt
@@ -60,6 +64,7 @@ extern void playStation(char* id); // aus webserver.c, steht in keinem Header
                                // (bei 80 ms Takt folgt das Poti in ~0,3 s)
 #define VOL_FORCE_MS   60000   // so lange nach dem Start gewinnt das Poti immer
 #define MUTE_STEP      410     // ca. 10 % von 4095 (5 % war zu empfindlich)
+#define MUTE_STOP_MS   (60UL * 60 * 1000)   // so lange Mute, dann Stream stoppen (1 h)
 
 static gpio_num_t keyPin[NB_KEYS];
 static gpio_num_t potPin = GPIO_NONE;
@@ -136,9 +141,40 @@ static void applyVolume(int vol)
 	wsVol(s);       // Weboberfläche aktualisieren
 }
 
+// --- Stream nach langem Mute stoppen ---
+// Mute setzt nur die Samples auf 0, der Stream läuft weiter (~1,4 GB/Tag).
+// Nach MUTE_STOP_MS Mute wird er gestoppt; Mute aus spielt den Sender wieder.
+// Startet jemand das Radio während des Mutes wieder (Weboberfläche, Sendertaste,
+// Rückkehr vom Handy), läuft die Stunde neu.
+static TickType_t muteSince;       // seit wann Mute bzw. das Radio wieder läuft
+static bool muteStopped = false;   // Stream wurde wegen Mute gestoppt
+
+static bool radioRunning(void)
+{
+	return player_config && (player_config->decoder_status == RUNNING);
+}
+
+static void checkMuteStop(bool muted)
+{
+	if (!muted) return;
+	if (muteStopped) {
+		if (radioRunning()) {           // wieder gestartet: Stunde neu zählen
+			muteStopped = false;
+			muteSince = xTaskGetTickCount();
+		}
+		return;
+	}
+	if (btSpeakerActive() || !radioRunning()) return;
+	if ((xTaskGetTickCount() - muteSince) * portTICK_PERIOD_MS < MUTE_STOP_MS) return;
+	printf("stationkeys: 1 h Mute -> Stream gestoppt\n");
+	clientSilentDisconnect();
+	muteStopped = true;
+}
+
 static void playKey(int n)
 {
 	char s[4];
+	muteSince = xTaskGetTickCount();             // Stunde neu, falls Mute an
 	if (btSpeakerActive()) btSpeakerToRadio();   // Handy trennen, zurück zum Radio
 	sprintf(s, "%d", n);
 	printf("stationkeys: Taste %d -> Sender %d\n", n, n);
@@ -149,6 +185,15 @@ static void setMute(bool on)
 {
 	renderer_set_mute(on);
 	printf("stationkeys: Mute %s\n", on ? "an" : "aus");
+	muteSince = xTaskGetTickCount();
+	if (!on && muteStopped) {
+		muteStopped = false;
+		if (!btSpeakerActive() && !radioRunning()) {
+			char s[4] = "255";   // 255 = aktueller Sender
+			printf("stationkeys: Stream wieder an\n");
+			playStation(s);
+		}
+	}
 }
 
 static bool configAdc(gpio_num_t pin, adc1_channel_t *chan, const char *name)
@@ -230,6 +275,7 @@ static void task_stationkeys(void *pvParams)
 				if (m < muteRef) muteRef = m;   // tiefsten Punkt merken
 				else if (m - muteRef >= MUTE_STEP) { muted = false; muteRef = m; setMute(false); }
 			}
+			checkMuteStop(muted);
 		}
 
 		tick++;

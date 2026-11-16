@@ -9,7 +9,7 @@ Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer fu
 
 | Name | Art | Inhalt | Zustand |
 |---|---|---|---|
-| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | Stand = v4 |
+| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | v4 + Stream-Stopp nach 1 h Mute (16.11.2026, noch nicht gebaut/getestet) |
 | `firmware-ng-v1` | Tag + Release | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig; fertige `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern**, getestet 06.11.2026 |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
 | `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
