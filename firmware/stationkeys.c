@@ -23,6 +23,12 @@
  *                      Ohne angeschlossenes Poti braucht der Pin einen Pull-up
  *                      (GPIO 32/33 intern, 34..39 nur extern, z. B. 100 kOhm
  *                      nach 3,3 V). 255 = nicht benutzt.
+ *   P_VOL_CURVE        Kurve des Lautstärke-Potis: rechnet einen Widerstand
+ *                      vom Schleifer nach 3,3 V nach, in % des Poti-Werts
+ *                      (220 kOhm an 1,4 MOhm = 16). Kleiner = am Anfang
+ *                      steiler. 0 = linear.
+ *   P_VOL_MIN          Lautstärke am Poti-Anschlag unten (0..254), damit der
+ *                      Ton leise hörbar bleibt. Ganz aus = Mute-Poti. 0 = aus.
  * Fehlen die Einträge, ist die jeweilige Funktion abgeschaltet.
  */
 #include <stdio.h>
@@ -70,6 +76,8 @@ static gpio_num_t keyPin[NB_KEYS];
 static gpio_num_t potPin = GPIO_NONE;
 static gpio_num_t mutePin = GPIO_NONE;
 static adc1_channel_t potChan, muteChan;
+static int volCurve = 0;    // P_VOL_CURVE: Nachbildung Widerstand Schleifer -> 3,3 V (in %), 0 = linear
+static int volMin = 0;      // P_VOL_MIN: Lautstärke am unteren Anschlag
 
 static int adcChannel(gpio_num_t gpio)
 {
@@ -108,6 +116,9 @@ static void readConfig(void)
 	}
 	potPin = readPin(handle, "P_VOL_POT");
 	mutePin = readPin(handle, "P_MUTE_POT");
+	uint8_t v;
+	if (nvs_get_u8(handle, "P_VOL_CURVE", &v) == ESP_OK) volCurve = v;
+	if (nvs_get_u8(handle, "P_VOL_MIN", &v) == ESP_OK) volMin = (v < VOL_MAX) ? v : 0;
 	close_partition(handle, hardware);
 }
 
@@ -116,6 +127,24 @@ static int readAdc(adc1_channel_t chan)
 	int sum = 0;
 	for (int i = 0; i < POT_SAMPLES; i++) sum += adc1_get_raw(chan);
 	return sum / POT_SAMPLES;
+}
+
+// Poti-Stellung (ADC_LOW..ADC_HIGH) -> Lautstärke volMin..VOL_MAX.
+// Mit P_VOL_CURVE wird gerechnet, als hinge ein Widerstand vom Schleifer nach
+// 3,3 V (Wert k in % des Poti-Widerstands): Der obere Teil des Potis (1-u)
+// liegt parallel zu k, die Spannung steigt am Anfang des Drehwegs schneller.
+// Die Kurve beginnt erst am Ende der unteren Totzone, damit es dort keinen
+// Sprung gibt. Gilt für lineare und logarithmische Potis gleich.
+static int potCurve(int raw)
+{
+	float u = (float)(raw - ADC_LOW) / (ADC_HIGH - ADC_LOW);   // 0..1
+	if (volCurve > 0)
+	{
+		float k = volCurve / 100.0f;
+		float o = (1.0f - u) * k / ((1.0f - u) + k);   // oberer Teil || Widerstand
+		u = (u + o > 0.0f) ? u / (u + o) : 0.0f;
+	}
+	return volMin + (int)(u * (VOL_MAX - volMin) + 0.5f);
 }
 
 static int readPot(void)
@@ -130,7 +159,7 @@ static int readPot(void)
 	int raw = filt / 16;
 	if (raw < ADC_LOW) raw = ADC_LOW;
 	if (raw > ADC_HIGH) raw = ADC_HIGH;
-	return (raw - ADC_LOW) * VOL_MAX / (ADC_HIGH - ADC_LOW);
+	return potCurve(raw);
 }
 
 static void applyVolume(int vol)
@@ -248,7 +277,7 @@ static void task_stationkeys(void *pvParams)
 		{
 			int vol = readPot();
 			bool moved = (lastVol < 0) || (abs(vol - lastVol) >= VOL_HYST)
-				|| ((vol != lastVol) && (vol == 0 || vol == VOL_MAX));
+				|| ((vol != lastVol) && (vol == volMin || vol == VOL_MAX));
 			// Kurz nach dem Start setzt KaRadio die gespeicherte Lautstärke.
 			// In dieser Zeit stellt das Poti sie immer wieder richtig.
 			if (moved) lastVol = vol;
@@ -309,6 +338,8 @@ void stationKeysStart(void)
 	}
 
 	if ((potPin != GPIO_NONE) && !configAdc(potPin, &potChan, "Poti")) potPin = GPIO_NONE;
+	if (potPin != GPIO_NONE)
+		printf("stationkeys: Poti-Kurve %d %%, Mindestlautstaerke %d\n", volCurve, volMin);
 
 	if (mutePin != GPIO_NONE)
 	{

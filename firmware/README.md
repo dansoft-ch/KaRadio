@@ -22,6 +22,10 @@ Die Pins stehen in der Hardware-Partition und lassen sich ohne neue Firmware än
 | `P_KEY5` | 2  | Taste 6 (Sender 5) gegen GND (in `firmware-ng-bt-v1`: 255, dafür `P_KEY_BT` = 2) |
 | `P_VOL_POT` | 39 (VN / SVN) | Poti-Schleifer; Poti-Enden an 3,3 V und GND |
 | `P_MUTE_POT` | 36 (VP / SVP, nur `firmware-ng-bt`) | Schleifer des Ein/Aus-Knopf-Potis; Enden an 3,3 V und GND; 100 kΩ nach 3,3 V |
+| `P_VOL_CURVE` | – (Wert 16) | Kurve des Lautstärke-Potis, siehe unten. 0 = linear |
+| `P_VOL_MIN` | – (Wert 30) | Lautstärke am unteren Anschlag (0..254). 0 = ganz leise möglich |
+
+**Kurve des Lautstärke-Potis** (seit 17.11.2026, noch nicht getestet): Am alten 1,4-MΩ-Poti war die Lautstärke schlecht über den Drehweg verteilt. Ein Widerstand 220 kΩ vom Schleifer nach 3,3 V hätte es ideal verteilt, aber damit sprang der Ton oder fiel aus. Die Firmware rechnet diesen Widerstand jetzt nach: `P_VOL_CURVE` = Widerstand in % des Poti-Werts (220 kΩ / 1,4 MΩ ≈ 16). Kleinerer Wert = am Anfang steiler. Aus dem gemessenen Verhältnis u (0..1) wird u' = u / (u + o) mit o = (1−u)·k / ((1−u) + k), k = `P_VOL_CURVE`/100. Beispiel mit 16: 10 % Drehweg-Spannung → 43 %, 50 % → 81 %. Die Kurve beginnt am Ende der unteren Totzone (~0,1 V), es gibt also keinen Sprung. Danach wird auf `P_VOL_MIN`..254 umgerechnet: Am Anschlag unten bleibt der Ton leise hörbar, ganz aus geht über das Mute-Poti. Zum Vergleich KaRadio: Lautstärke 5 ≈ −48 dB, 30 ≈ −34 dB, 50 ≈ −28 dB, 100 ≈ −21 dB, 200 ≈ −11 dB. Beide Werte lassen sich ohne neue Firmware ändern (`.csv` anpassen, `standard_psram_dan_keys.bin` neu flashen). Beim Start erscheint `stationkeys: Poti-Kurve 16 %, Mindestlautstaerke 30`.
 
 - Die Tasten brauchen keinen Widerstand (interner Pull-up). `255` = Taste nicht benutzt.
 - Das Poti nur an einen ADC1-Pin hängen (32–39, frei sind 35, 36 und 39). ADC2-Pins funktionieren bei aktivem WLAN nicht.

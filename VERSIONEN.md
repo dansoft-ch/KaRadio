@@ -242,6 +242,10 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 | 10:52:47 | `stationkeys: Mute aus`, `Stream wieder an` |
 | 10:52:49 | `##CLI.PLAYING#`, Musik wieder da (2 s) ✔ |
 
+## Nach v5: Kurve und Mindestlautstärke des Lautstärke-Potis (17.11.2026, noch nicht getestet)
+
+Am alten 1,4-MΩ-Poti war die Lautstärke schlecht über den Drehweg verteilt. Ein Widerstand 220 kΩ vom Schleifer nach Plus hätte gepasst, dabei sprang der Ton aber oder fiel aus (vermutlich Kontaktaussetzer am alten Schleifer: der Widerstand zieht den Pin dann sofort auf 3,3 V). Die Firmware rechnet den Widerstand jetzt nach (`P_VOL_CURVE` = 16, d. h. 16 % des Poti-Werts) und setzt am unteren Anschlag nicht 0, sondern `P_VOL_MIN` = 30 (leise hörbar; ganz aus = Mute-Poti). Formel und Werte: `firmware/README.md`. Fehlen die Einträge in der Konfiguration, verhält sich das Poti wie in v5.
+
 ## Senderliste mit kurzen Startzeiten
 
 Seit 16.11.2026 `sender/WebStations_Daniel_schnell.txt` (Laden im Webinterface über **Load**). SRF ohne `.m3u`-Playlist, neo 1 und Rockantenne über HTTP statt HTTPS. Startzeit aller 6 Sender 1,2–2,8 s statt bis 5,7 s. Details und Messwerte: `sender/README.md`.
