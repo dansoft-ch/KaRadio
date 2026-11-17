@@ -34,7 +34,7 @@ Warum nur ein ESP32-WROVER? Er kann **klassisches Bluetooth** (der ESP32-S3 kann
 | Teil | Anschluss |
 |---|---|
 | ESP32-WROVER (ESP32-D0WD-V3, 16 MB Flash, PSRAM) | USB-Seriell-Chip CH343 |
-| Verstärker MAX98357A | LRC → GPIO 25, BCLK → GPIO 26, DIN → GPIO 22, VIN → 5 V, GND |
+| Verstärker MAX98357A | LRC → GPIO 25, BCLK → GPIO 26, DIN → GPIO 22, VIN → 5 V, GND, **GAIN → VIN (6 dB)** |
 | Tasten 1–6 (Rasttasten gegen GND, interner Pull-up) | GPIO 13, 14, 32, 15, 5, 2 |
 | Lautstärke-Poti (Enden an 3,3 V / GND) | Schleifer → GPIO 39 |
 | Ein/Aus-Knopf: Poti (Mute, Drehrichtung ±10 %) | Schleifer → GPIO 36 |
@@ -42,6 +42,8 @@ Warum nur ein ESP32-WROVER? Er kann **klassisches Bluetooth** (der ESP32-S3 kann
 | IR-Empfänger (optional) | GPIO 21 |
 
 Potis nur an 3,3 V, nie an 5 V, und nur an ADC1-Pins (32–39). GPIO 2, 5 und 15 sind Boot-Pins – eingerastete Tasten beim Einschalten sind unkritisch, zum Flashen Taste 1 einrasten. Die Pins stehen in [`firmware/standard_psram_dan_keys.csv`](https://github.com/dansoft-ch/KaRadio/blob/main/firmware/standard_psram_dan_keys.csv) und lassen sich ohne neue Firmware ändern (Eintrag `255` = nicht benutzt).
+
+**Lautstärke MAX98357A (17.11.2026):** GAIN direkt mit VIN verbunden = **6 dB**. Das passt ideal zum Lautsprecher: Er ist nicht überfordert, die Stoffmembran schwingt nur wenig. Mit GAIN offen (floating, 9 dB) ist es zu laut, die Stoffmembran schwingt ca. 5 mm – noch kein Übersteuern oder Scheppern, aber der Lautsprecher wirkt überlastet.
 
 ## Flashen
 
