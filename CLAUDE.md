@@ -5,7 +5,7 @@
 Ein einziges Board: **ESP32-WROVER** mit KaRadio32 + **Firmware NG mit Bluetooth** (`firmware/`). Der WROVER liest die 6 Sendertasten, das Lautstärke- und das Mute-Poti selbst und ist zugleich Bluetooth-Lautsprecher „Biennophone“.
 
 - **`main`** = aktueller Stand und Weiterentwicklung (enthält `firmware-ng-bt`, Stand v4). Die Branches `firmware-ng` und `firmware-ng-bt` sind darin aufgegangen.
-- Auf dem Radio läuft **`main`** (Code `7b0921f`, Build `1527c55`, 18.11.2026 mit Konfiguration geflasht, Board 5C92044814 an COM3, fertig eingebaut) = v5 + Poti-Kurve; noch kein Tag. Davor Tag `firmware-ng-bt-v4`. Übersicht aller Versionen: `VERSIONEN.md`.
+- Auf dem Radio läuft Tag **`firmware-ng-bt-v6`** (Code `7b0921f`, Build `1527c55`, 18.11.2026 mit Konfiguration geflasht, Board 5C92044814 an COM3, fertig eingebaut) = v5 + Poti-Kurve. Davor Tag `firmware-ng-bt-v4`. Übersicht aller Versionen: `VERSIONEN.md`.
 - Frühere Lösungen (Pro Mini IR/UART, ESP32-S3 als USB-Host) liegen in **`archiv/`** (Beschreibung und S3-Notizen in `archiv/README.md`) und als Tags `archiv/promini-ir-uart` und `archiv/s3-usbhost`. Nicht weiterentwickeln.
 
 ## Firmware Next Generation (ab 06.11.2026)

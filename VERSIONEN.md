@@ -2,20 +2,21 @@
 
 Diese Datei erklärt, welche Version des Radios wo liegt und wie man zu einer funktionierenden Version zurückkommt. Stand: 18.11.2026.
 
-> **Auf dem Radio läuft: `main`** (Code aus Commit `7b0921f`, Build `1527c55`, geflasht 18.11.2026 an COM3 mit Konfiguration, getestet: Kurve und Mindestlautstärke passen). Das ist v5 plus [Kurve und Mindestlautstärke des Lautstärke-Potis](#nach-v5-kurve-und-mindestlautstärke-des-lautstärke-potis).
+> **Auf dem Radio läuft: `firmware-ng-bt-v6`** (Code aus Commit `7b0921f`, Build `1527c55`, geflasht 18.11.2026 an COM3 mit Konfiguration, getestet: Kurve und Mindestlautstärke passen). Das ist v5 plus [Kurve und Mindestlautstärke des Lautstärke-Potis](#nach-v5-kurve-und-mindestlautstärke-des-lautstärke-potis).
 > Version davor auf dem Radio: Tag `firmware-ng-bt-v4`.
 
 ## Kurzfassung
 
 | Name | Art | Inhalt | Zustand |
 |---|---|---|---|
-| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | = v5 + Kurve und Mindestlautstärke des Lautstärke-Potis; **läuft auf dem Radio** (18.11.2026) |
+| `main` | Branch | **aktueller Stand und Weiterentwicklung** (seit 10.11.2026; enthält alles aus `firmware-ng` und `firmware-ng-bt`) | = `firmware-ng-bt-v6` (18.11.2026) |
 | `firmware-ng-v1` | Tag + Release | **Firmware NG**: der WROVER liest 6 Sendertasten und das Poti selbst, kein S3 nötig; fertige `.bin`-Dateien zum Flashen | **gesicherte Version, nicht verändern**, getestet 06.11.2026 |
 | `firmware-ng-bt-v1` | Tag | Firmware NG **plus Bluetooth über Taste 6** (Wechsel per Neustart), `.bin` liegen im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026 |
 | `firmware-ng-bt-v2` | Tag | **v2**: Bluetooth immer an, automatische Umschaltung, 6 Sendertasten, Lautstärke- und Mute-Poti (10 %); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 07.11.2026; bekannter Fehler: Aussetzer ca. 30 s (gefunden 08.11.2026) |
 | `firmware-ng-bt-v3` | Tag | **v3** = v2 + Korrektur „Umschalten nur bei hörbarem Ton“; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 09.11.2026 |
 | `firmware-ng-bt-v4` | Tag | **v4** = v3 + Taste 3 an GPIO 32 (GPIO 27 defekt) + geglättetes Lautstärke-Poti; `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 15.11.2026 im eingebauten Gerät (lief bis 18.11.2026 auf dem Radio) |
-| `firmware-ng-bt-v5` | Tag | **v5** = v4 + [Stream-Stopp nach 1 h Mute](#änderungen-in-v5-stream-stopp-nach-1-h-mute); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 16.11.2026 auf dem Testboard (5C92044868), noch nicht auf dem Radio |
+| `firmware-ng-bt-v5` | Tag | **v5** = v4 + [Stream-Stopp nach 1 h Mute](#änderungen-in-v5-stream-stopp-nach-1-h-mute); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version**, getestet 16.11.2026 auf dem Testboard (5C92044868), nie allein auf dem Radio |
+| `firmware-ng-bt-v6` | Tag | **v6** = v5 + [Kurve und Mindestlautstärke des Lautstärke-Potis](#nach-v5-kurve-und-mindestlautstärke-des-lautstärke-potis) (`P_VOL_CURVE` 16, `P_VOL_MIN` 30); `.bin` im Tag unter `firmware/bin/` | **gesicherte Version, läuft auf dem Radio**, getestet 18.11.2026 im eingebauten Gerät |
 | `archiv/promini-ir-uart` | Tag | frühere Lösung: Arduino Pro Mini sendet IR-Codes bzw. UART-Befehle (Dateien heute in `archiv/`) | nicht mehr in Gebrauch |
 | `archiv/s3-usbhost` | Tag | frühere Lösung mit **zwei Boards**: ESP32-S3 liest Tasten + Poti und schickt Befehle per USB an den WROVER (Dateien heute in `archiv/`) | funktionierte, nicht mehr in Gebrauch |
 
@@ -55,6 +56,10 @@ Genauso, mit `git switch --detach firmware-ng-bt-v4`. Konfiguration: Taste 3 an 
 ### `firmware-ng-bt-v5` (Stream-Stopp nach 1 h Mute)
 
 Genauso, mit `git switch --detach firmware-ng-bt-v5`. Konfiguration wie v4. Auf das eingebaute Radio genügt `-OhneKonfig`.
+
+### `firmware-ng-bt-v6` (läuft auf dem Radio)
+
+Genauso, mit `git switch --detach firmware-ng-bt-v6`. Konfiguration wie v4 plus `P_VOL_CURVE` = 16 und `P_VOL_MIN` = 30. Am 18.11.2026 **mit Konfiguration** geflasht. Auf ein Board, das schon v6 hatte, genügt `-OhneKonfig`; von v5 oder älter her braucht es die Konfiguration, sonst fehlen die Poti-Werte.
 
 Sender, WLAN-Daten und Einstellungen bleiben bei allen erhalten. Mehr Details: `firmware/README.md`.
 
@@ -244,7 +249,7 @@ Entschieden nach Diskussion am 08.11.2026. Verworfen wurde „verbunden = Handy,
 
 ## Nach v5: Kurve und Mindestlautstärke des Lautstärke-Potis
 
-**Stand:** `main`, Code aus Commit `a491a3c` (17.11.2026), geflasht als Build `1527c55` (Code `7b0921f`). **Am 18.11.2026 im eingebauten Radio getestet** (Board 5C92044814 an COM3, mit Konfiguration geflasht, damit `P_VOL_CURVE` und `P_VOL_MIN` auf dem Radio stehen). Vorher am selben Tag auf dem Testboard (COM5) geflasht, Start ok. Noch kein Tag.
+**Stand:** Tag `firmware-ng-bt-v6`. Code aus Commit `a491a3c` (17.11.2026), geflasht als Build `1527c55` (Code `7b0921f`, gleiche `.bin` wie im Tag). **Am 18.11.2026 im eingebauten Radio getestet** (Board 5C92044814 an COM3, mit Konfiguration geflasht, damit `P_VOL_CURVE` und `P_VOL_MIN` auf dem Radio stehen). Vorher am selben Tag auf dem Testboard (COM5) geflasht, Start ok.
 
 Am alten 1,4-MΩ-Poti war die Lautstärke schlecht über den Drehweg verteilt. Ein Widerstand 220 kΩ vom Schleifer nach Plus hätte gepasst, dabei sprang der Ton aber oder fiel aus (vermutlich Kontaktaussetzer am alten Schleifer: der Widerstand zieht den Pin dann sofort auf 3,3 V). Die Firmware rechnet den Widerstand jetzt nach (`P_VOL_CURVE` = 16, d. h. 16 % des Poti-Werts) und setzt am unteren Anschlag nicht 0, sondern `P_VOL_MIN` = 30 (leise hörbar; ganz aus = Mute-Poti). Formel und Werte: `firmware/README.md`. Fehlen die Einträge in der Konfiguration, verhält sich das Poti wie in v5.
 
