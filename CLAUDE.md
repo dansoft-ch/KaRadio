@@ -5,7 +5,7 @@
 Ein einziges Board: **ESP32-WROVER** mit KaRadio32 + **Firmware NG mit Bluetooth** (`firmware/`). Der WROVER liest die 6 Sendertasten, das Lautstärke- und das Mute-Poti selbst und ist zugleich Bluetooth-Lautsprecher „Biennophone“.
 
 - **`main`** = aktueller Stand und Weiterentwicklung (enthält `firmware-ng-bt`, Stand v4). Die Branches `firmware-ng` und `firmware-ng-bt` sind darin aufgegangen.
-- Auf dem Radio läuft Tag **`firmware-ng-bt-v4`** (15.11.2026, Board 5C92044814 an COM10, fertig eingebaut). Übersicht aller Versionen: `VERSIONEN.md`.
+- Auf dem Radio läuft **`main`** (Code `7b0921f`, Build `1527c55`, 18.11.2026 mit Konfiguration geflasht, Board 5C92044814 an COM3, fertig eingebaut) = v5 + Poti-Kurve; noch kein Tag. Davor Tag `firmware-ng-bt-v4`. Übersicht aller Versionen: `VERSIONEN.md`.
 - Frühere Lösungen (Pro Mini IR/UART, ESP32-S3 als USB-Host) liegen in **`archiv/`** (Beschreibung und S3-Notizen in `archiv/README.md`) und als Tags `archiv/promini-ir-uart` und `archiv/s3-usbhost`. Nicht weiterentwickeln.
 
 ## Firmware Next Generation (ab 06.11.2026)
@@ -24,9 +24,9 @@ KaRadio32 selbst liest Tasten und Poti (`firmware/`, Anleitung in `firmware/READ
 
 ## Senderliste
 
-Aktuell `sender/WebStations_Daniel_schnell.txt` (16.11.2026): Streams direkt und über HTTP eingetragen (HTTPS kostet am ESP32 ~1,5 s, `.m3u` ~1,3 s). Messwerte in `sender/README.md`. Testboard 5C92044868 (COM4) läuft seit 16.11.2026 mit Firmware-Build `2473610` und dieser Liste. Stream-Stopp nach 1 h Mute dort getestet (ok); Lautstärke-Poti hebt Mute bewusst nicht auf (Entscheid 16.11.2026, erst Praxis beobachten). Dieser Stand ist Tag `firmware-ng-bt-v5` (16.11.2026); auf dem Radio (COM10) läuft noch v4.
+Aktuell `sender/WebStations_Daniel_schnell.txt` (16.11.2026): Streams direkt und über HTTP eingetragen (HTTPS kostet am ESP32 ~1,5 s, `.m3u` ~1,3 s). Messwerte in `sender/README.md`. Testboard 5C92044868 (COM4) läuft seit 16.11.2026 mit Firmware-Build `2473610` und dieser Liste. Stream-Stopp nach 1 h Mute dort getestet (ok); Lautstärke-Poti hebt Mute bewusst nicht auf (Entscheid 16.11.2026, erst Praxis beobachten). Dieser Stand ist Tag `firmware-ng-bt-v5` (16.11.2026); auf dem Radio läuft seit 18.11.2026 v5 + Poti-Kurve (siehe unten).
 
-**Lautstärke-Poti nach v5** (17.11.2026, noch nicht getestet): Das Vintage-Poti (1,4 MΩ) verteilt die Lautstärke schlecht. 220 kΩ Schleifer → Plus wäre ideal gewesen, aber der Ton sprang oder fiel aus → Widerstand wieder entfernt. Neu in `stationkeys.c`: `P_VOL_CURVE` (Widerstand in % des Poti-Werts, 16 ≙ 220 kΩ/1,4 MΩ, 0 = linear) rechnet ihn nach; `P_VOL_MIN` (30) = Lautstärke am unteren Anschlag, damit der Ton leise hörbar bleibt (ganz aus = Mute-Poti). KaRadio-Lautstärke v → Pegel log10(255/(254−v))·105,5/256 (`renderer_volume(v+2)`): 5 ≈ −48 dB, 30 ≈ −34 dB, 100 ≈ −21 dB. Tipp an den Nutzer: 100 nF Schleifer → GND beruhigt den hochohmigen ADC-Eingang.
+**Lautstärke-Poti nach v5** (17.11.2026; am 18.11.2026 im Radio getestet: „Kurve ist super“, Mindestlautstärke 30 „passt perfekt“ → Werte so lassen; Testboard 5C92044868 hängt inzwischen an COM5 und hat denselben Build): Das Vintage-Poti (1,4 MΩ) verteilt die Lautstärke schlecht. 220 kΩ Schleifer → Plus wäre ideal gewesen, aber der Ton sprang oder fiel aus → Widerstand wieder entfernt. Neu in `stationkeys.c`: `P_VOL_CURVE` (Widerstand in % des Poti-Werts, 16 ≙ 220 kΩ/1,4 MΩ, 0 = linear) rechnet ihn nach; `P_VOL_MIN` (30) = Lautstärke am unteren Anschlag, damit der Ton leise hörbar bleibt (ganz aus = Mute-Poti). KaRadio-Lautstärke v → Pegel log10(255/(254−v))·105,5/256 (`renderer_volume(v+2)`): 5 ≈ −48 dB, 30 ≈ −34 dB, 100 ≈ −21 dB. Tipp an den Nutzer: 100 nF Schleifer → GND beruhigt den hochohmigen ADC-Eingang.
 
 ## Hardware (ESP32-WROVER)
 - Pins stehen in `firmware/standard_psram_dan_keys.csv` (Tasten GPIO 13, 14, 32, 15, 5, 2; Lautstärke-Poti GPIO 39; Mute-Poti GPIO 36; IR GPIO 21).
